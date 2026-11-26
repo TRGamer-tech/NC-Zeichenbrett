@@ -4,6 +4,9 @@
 -->
 # Changelog
 
+## 1.4.1
+- Saving and saving a copy show their progress ("Preparing file …", then a percentage while uploading), in the browser and in the mobile apps
+
 ## 1.4.0
 - Nextcloud mobile apps (Android, iOS): Zeichenbrett is offered under "Edit" through Nextcloud's Direct Editing. File types set to open in Zeichenbrett (admin default or personal setting) are preferred over office editors, all other supported types are offered as an alternative
 - The editor page in the apps works without a login session: loading and saving use short-lived signed tokens bound to one user and one file, with brute-force protection

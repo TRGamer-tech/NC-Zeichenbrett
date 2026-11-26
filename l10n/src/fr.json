@@ -46,9 +46,7 @@
 	"Save as copy": "Enregistrer une copie",
 	"Save as copy (Ctrl+Shift+S)": "Enregistrer une copie (Ctrl+Maj+S)",
 	"Saved": "Enregistré",
-	"Saving copy …": "Enregistrement de la copie …",
 	"Saving failed: {reason}": "Échec de l’enregistrement : {reason}",
-	"Saving …": "Enregistrement …",
 	"The file could not be opened.": "Le fichier n’a pas pu être ouvert.",
 	"The file is locked": "Le fichier est verrouillé",
 	"The file was changed by someone else in the meantime. Overwrite it anyway?": "Le fichier a été modifié par quelqu’un d’autre entre-temps. L’écraser quand même ?",
@@ -74,5 +72,8 @@
 	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "Le mode stylet est désactivé : le doigt dessine. Touchez pour que seul le stylet dessine.",
 	"Loading failed: {reason}": "Échec du chargement : {reason}",
 	"A file with this name already exists.": "Un fichier portant ce nom existe déjà.",
-	"You can close this window now.": "Vous pouvez maintenant fermer cette fenêtre."
+	"You can close this window now.": "Vous pouvez maintenant fermer cette fenêtre.",
+	"Preparing file …": "Préparation du fichier …",
+	"Saving … {percent} %": "Enregistrement … {percent} %",
+	"Saving copy … {percent} %": "Enregistrement de la copie … {percent} %"
 }

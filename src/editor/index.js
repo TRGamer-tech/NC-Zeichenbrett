@@ -351,14 +351,16 @@ class Editor {
 		}
 		const format = this.isPdf ? 'application/pdf' : this.imageFormatFor(this.io.mime)
 		if (!this.isPdf && format !== this.io.mime) return this.saveCopy()
-		await this.withBusy(t('Saving …'), async () => {
+		await this.withBusy(t('Preparing file …'), async (setText) => {
 			const { bytes, mime } = await this.buildFile(format)
-			let { status } = await this.io.save(bytes, mime)
+			const progress = (f) => setText(t('Saving … {percent} %', { percent: Math.round(f * 100) }))
+			progress(0)
+			let { status } = await this.io.save(bytes, mime, false, progress)
 			if (status === 412) {
 				if (!confirm(t('The file was changed by someone else in the meantime. Overwrite it anyway?') + '\n\n' + t('Cancel and use "Copy" to keep both versions.'))) {
 					throw new Error(ABORTED)
 				}
-				status = (await this.io.save(bytes, mime, true)).status
+				status = (await this.io.save(bytes, mime, true, progress)).status
 			}
 			checkStatus(status)
 			this.model.dirty = false
@@ -367,12 +369,14 @@ class Editor {
 		})
 	}
 
+	/** Busy overlay; fn receives setText(text) for progress messages */
 	async withBusy(text, fn) {
 		this.busy = true
-		const ov = h('div', { class: 'zb-busy' }, h('div', { class: 'zb-spinner' }), h('div', {}, text))
+		const label = h('div', { class: 'zb-busy-text' }, text)
+		const ov = h('div', { class: 'zb-busy' }, h('div', { class: 'zb-spinner' }), label)
 		this.root.append(ov)
 		try {
-			await fn()
+			await fn((s) => { label.textContent = s })
 		} catch (e) {
 			console.error('[zeichenbrett]', e)
 			if (e?.message !== ABORTED) alert(e?.message || String(e))
@@ -417,9 +421,11 @@ class Editor {
 			if (!confirm(t('"{name}" already exists. Overwrite it?', { name }))) return
 			overwrite = true
 		}
-		await this.withBusy(t('Saving copy …'), async () => {
+		await this.withBusy(t('Preparing file …'), async (setText) => {
 			const { bytes, mime } = await this.buildFile(format)
-			const res = await io.writeCopy(name, bytes, mime, overwrite)
+			const progress = (f) => setText(t('Saving copy … {percent} %', { percent: Math.round(f * 100) }))
+			progress(0)
+			const res = await io.writeCopy(name, bytes, mime, overwrite, progress)
 			checkStatus(res.status)
 			// from now on Ctrl+S saves into the copy, the original stays untouched
 			this.io = res.io

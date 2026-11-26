@@ -46,9 +46,7 @@
 	"Save as copy": "Als Kopie speichern",
 	"Save as copy (Ctrl+Shift+S)": "Als Kopie speichern (Strg+Umschalt+S)",
 	"Saved": "Gespeichert",
-	"Saving copy …": "Speichere Kopie …",
 	"Saving failed: {reason}": "Speichern fehlgeschlagen: {reason}",
-	"Saving …": "Speichere …",
 	"The file could not be opened.": "Die Datei konnte nicht geöffnet werden.",
 	"The file is locked": "Die Datei ist gesperrt",
 	"The file was changed by someone else in the meantime. Overwrite it anyway?": "Die Datei wurde inzwischen von jemand anderem geändert. Trotzdem überschreiben?",
@@ -74,5 +72,8 @@
 	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "Stiftmodus ist aus: Der Finger zeichnet. Antippen, damit nur der Stift zeichnet.",
 	"Loading failed: {reason}": "Laden fehlgeschlagen: {reason}",
 	"A file with this name already exists.": "Eine Datei mit diesem Namen existiert bereits.",
-	"You can close this window now.": "Sie können dieses Fenster jetzt schliessen."
+	"You can close this window now.": "Sie können dieses Fenster jetzt schliessen.",
+	"Preparing file …": "Datei wird vorbereitet …",
+	"Saving … {percent} %": "Speichere … {percent} %",
+	"Saving copy … {percent} %": "Speichere Kopie … {percent} %"
 }

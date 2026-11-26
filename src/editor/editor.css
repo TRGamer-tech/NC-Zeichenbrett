@@ -193,3 +193,5 @@ body.zb-open { overflow: hidden; }
 /* pen mode switch: always labelled so it is clear what it does */
 .zb-root .zb-btn.zb-penmode { padding: 0 10px 0 6px; font-size: 13px; }
 .zb-root .zb-btn.zb-penmode .zb-keep { white-space: nowrap; }
+
+.zb-busy-text { font-variant-numeric: tabular-nums; }

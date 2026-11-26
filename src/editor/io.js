@@ -8,7 +8,6 @@
 // save()/writeCopy() resolve to { status, ... } and never throw for HTTP errors, so the
 // editor can handle conflicts (412) and "already exists" in one place.
 
-import axios from '@nextcloud/axios'
 import { emit } from '@nextcloud/event-bus'
 import { generateUrl } from '@nextcloud/router'
 import { t } from '../l10n.js'
@@ -36,6 +35,21 @@ async function readBody(res, onProgress) {
 	return out
 }
 
+/** PUT with upload progress (fetch cannot report it). Resolves { status, text, etag }. */
+function putWithProgress(url, body, headers, onProgress) {
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest()
+		xhr.open('PUT', url)
+		for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+		xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(e.loaded / e.total) }
+		xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText, etag: xhr.getResponseHeader('etag') || xhr.getResponseHeader('oc-etag') })
+		xhr.onerror = () => reject(new Error(xhr.status ? 'HTTP ' + xhr.status : 'Network error'))
+		xhr.send(body)
+	})
+}
+
+const davHeaders = () => ({ requesttoken: window.OC?.requestToken || document.head.dataset.requesttoken || '' })
+
 export class DavIO {
 	constructor(node) {
 		this.kind = 'dav'
@@ -60,12 +74,12 @@ export class DavIO {
 		return readBody(res, onProgress)
 	}
 
-	async save(bytes, mime, force = false) {
-		const headers = { 'Content-Type': mime }
+	async save(bytes, mime, force = false, onProgress) {
+		const headers = { 'Content-Type': mime, ...davHeaders() }
 		if (this.etag && !force) headers['If-Match'] = this.etag
-		const res = await axios.put(this.url, bytes, { headers, validateStatus: () => true })
+		const res = await putWithProgress(this.url, bytes, headers, onProgress)
 		if (res.status < 300) {
-			this.etag = res.headers?.etag || res.headers?.['oc-etag'] || null
+			this.etag = res.etag || null
 			this.notify('files:node:updated', this.url)
 		}
 		return { status: res.status }
@@ -89,10 +103,10 @@ export class DavIO {
 		return joinUrl(this.folder, name) === this.url
 	}
 
-	async writeCopy(name, bytes, mime, overwrite) {
+	async writeCopy(name, bytes, mime, overwrite, onProgress) {
 		const url = joinUrl(this.folder, name)
 		if (!overwrite && await davExists(url)) return { status: 409 }
-		const res = await axios.put(url, bytes, { headers: { 'Content-Type': mime }, validateStatus: () => true })
+		const res = await putWithProgress(url, bytes, { 'Content-Type': mime, ...davHeaders() }, onProgress)
 		if (res.status >= 300) return { status: res.status }
 		this.notify('files:node:created', url)
 		const copy = new DavIO({ source: url, basename: name, mime, permissions: 31 })
@@ -142,11 +156,11 @@ export class DirectIO {
 		return readBody(res, onProgress)
 	}
 
-	async save(bytes, mime, force = false) {
-		const headers = { 'Content-Type': mime }
+	async save(bytes, mime, force = false, onProgress) {
+		const headers = { 'Content-Type': mime, 'X-Zeichenbrett-Token': this.token }
 		if (this.etag && !force) headers['If-Match'] = this.etag
-		const res = await this.request('file' + (force ? '?force=1' : ''), { method: 'PUT', headers, body: bytes })
-		if (res.ok) this.etag = '"' + (await res.json()).etag + '"'
+		const res = await putWithProgress(this.base + 'file' + (force ? '?force=1' : ''), bytes, headers, onProgress)
+		if (res.status < 300) this.etag = '"' + JSON.parse(res.text).etag + '"'
 		return { status: res.status }
 	}
 
@@ -162,11 +176,11 @@ export class DirectIO {
 		return name === this.name
 	}
 
-	async writeCopy(name, bytes, mime, overwrite) {
+	async writeCopy(name, bytes, mime, overwrite, onProgress) {
 		const q = 'copy?name=' + encodeURIComponent(name) + (overwrite ? '&overwrite=1' : '')
-		const res = await this.request(q, { method: 'PUT', headers: { 'Content-Type': mime }, body: bytes })
-		if (!res.ok) return { status: res.status }
-		const data = await res.json()
+		const res = await putWithProgress(this.base + q, bytes, { 'Content-Type': mime, 'X-Zeichenbrett-Token': this.token }, onProgress)
+		if (res.status >= 300) return { status: res.status }
+		const data = JSON.parse(res.text)
 		const copy = new DirectIO({ token: data.token, name: data.name, mime: data.mime, canWrite: true, canCreate: this.canCreate })
 		copy.etag = '"' + data.etag + '"'
 		return { status: res.status, io: copy }

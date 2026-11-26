@@ -35,7 +35,7 @@ Open a file from the "…" menu with **Draw & annotate**, or simply click it if 
 * Funktioniert in den Nextcloud-Apps für Android und iOS: unter „Bearbeiten“ im Dateimenü
 
 Öffne eine Datei über das „…“-Menü mit **Zeichnen & bearbeiten**, oder klicke sie einfach an, wenn Zeichenbrett als Standard eingestellt ist.]]></description>
-	<version>1.4.0</version>
+	<version>1.4.1</version>
 	<licence>agpl</licence>
 	<author homepage="https://github.com/TRGamer-tech">TRGamer-tech</author>
 	<namespace>Zeichenbrett</namespace>
