@@ -71,5 +71,8 @@
 	"Pen mode: on": "Modalità penna: attiva",
 	"Pen mode: off": "Modalità penna: disattiva",
 	"Pen mode is on: only the pen draws, your finger scrolls and zooms. Tap to turn it off.": "La modalità penna è attiva: solo la penna disegna, il dito scorre e ingrandisce. Tocca per disattivarla.",
-	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "La modalità penna è disattivata: il dito disegna. Tocca perché disegni solo la penna."
+	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "La modalità penna è disattivata: il dito disegna. Tocca perché disegni solo la penna.",
+	"Loading failed: {reason}": "Caricamento non riuscito: {reason}",
+	"A file with this name already exists.": "Esiste già un file con questo nome.",
+	"You can close this window now.": "Ora puoi chiudere questa finestra."
 }

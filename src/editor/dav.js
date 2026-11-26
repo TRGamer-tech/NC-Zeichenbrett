@@ -17,18 +17,35 @@ export function joinUrl(folderUrl, name) {
 	return folderUrl.replace(/\/?$/, '/') + encodeURIComponent(name)
 }
 
-/** HEAD request that never uses the browser cache (Nextcloud sends no Cache-Control for DAV files) */
-export function davHead(url) {
-	return fetch(url, {
-		method: 'HEAD',
+const requesttoken = () => window.OC?.requestToken || document.head.dataset.requesttoken || ''
+
+/**
+ * Existence / etag lookup with PROPFIND. Deliberately not HEAD or GET: Nextcloud sends no
+ * Cache-Control for WebDAV files, so browsers, reverse proxies and CDNs (which cache
+ * .pdf/.png/.jpg URLs and even 404 answers) could answer from a cache. PROPFIND is
+ * never cached. Returns null if the file does not exist.
+ */
+export async function davStat(url) {
+	const res = await fetch(url, {
+		method: 'PROPFIND',
 		cache: 'no-store',
 		credentials: 'same-origin',
-		headers: { requesttoken: window.OC?.requestToken || document.head.dataset.requesttoken || '' },
+		headers: { Depth: '0', 'Content-Type': 'application/xml', requesttoken: requesttoken() },
+		body: '<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>',
 	})
+	if (res.status === 404) return null
+	if (!res.ok) throw new Error('HTTP ' + res.status)
+	const doc = new DOMParser().parseFromString(await res.text(), 'application/xml')
+	return { etag: doc.getElementsByTagNameNS('DAV:', 'getetag')[0]?.textContent || null }
 }
 
 export async function davExists(url) {
-	return (await davHead(url)).ok
+	return (await davStat(url)) !== null
+}
+
+/** URL for downloading a file that no cache on the way can answer */
+export function uncachedUrl(url) {
+	return url + (url.includes('?') ? '&' : '?') + 'zb=' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
 /** Build a Files-app Node for a DAV URL (used to refresh the file list). */

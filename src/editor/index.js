@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Editor shell: one toolbar, pen / marker / eraser, save, save as copy.
 
-import axios from '@nextcloud/axios'
-import { emit } from '@nextcloud/event-bus'
 import { generateFilePath } from '@nextcloud/router'
 import css from './editor.css'
 import { ICONS } from './icons.js'
@@ -13,10 +11,11 @@ import { Tools, TOOLS } from './tools.js'
 import { setPdfWorker, openPdf, exportPdf, pdfSource } from './pdfdoc.js'
 import { openImage, exportImage, imageSource, renderBase, defaultImageState, cssFilter } from './imagedoc.js'
 import { t } from '../l10n.js'
-import { pickFolder, davRootOf, davExists, davHead, statNode, joinUrl } from './dav.js'
+import { DavIO, DirectIO } from './io.js'
+
+export { DirectIO }
 
 const APP_ID = 'zeichenbrett'
-const PERM_UPDATE = 2
 const COLORS = ['#000000', '#e53935', '#fb8c00', '#fdd835', '#43a047', '#1e88e5', '#8e24aa', '#ffffff']
 // thin / medium / thick, in screen pixels
 const SIZES = {
@@ -64,14 +63,19 @@ function splitName(name) {
 	return i > 0 ? [name.slice(0, i), name.slice(i + 1)] : [name, '']
 }
 
-export async function openEditor(node, { version = '' } = {}) {
+/**
+ * @param {object} node  Files app node (or { basename, mime } with opts.io)
+ * @param {{ version?: string, io?: object, jsBase?: string }} opts
+ */
+export async function openEditor(node, { version = '', io = null, jsBase = '' } = {}) {
 	if (current) return
 	if (!styleInjected) {
 		document.head.append(h('style', { id: 'zeichenbrett-style' }, css))
 		styleInjected = true
 	}
-	setPdfWorker(generateFilePath(APP_ID, '', 'js/pdf.worker.min.js') + '?v=' + encodeURIComponent(version), generateFilePath(APP_ID, '', 'js/pdfjs/'))
-	current = new Editor(node)
+	const js = jsBase || generateFilePath(APP_ID, '', 'js/')
+	setPdfWorker(js + 'pdf.worker.min.js?v=' + encodeURIComponent(version), js + 'pdfjs/')
+	current = new Editor(node, io || new DavIO(node))
 	try {
 		await current.init()
 	} catch (e) {
@@ -81,17 +85,11 @@ export async function openEditor(node, { version = '' } = {}) {
 }
 
 class Editor {
-	constructor(node) {
+	constructor(node, io) {
 		this.settings = loadSettings()
 		if (!TOOLS[this.settings.tool]) this.settings.tool = 'pen'
-		this.target = {
-			url: node.source,
-			name: node.basename,
-			mime: node.mime,
-			etag: null,
-			canWrite: typeof node.permissions !== 'number' || (node.permissions & PERM_UPDATE) !== 0,
-		}
-		this.isPdf = node.mime === 'application/pdf'
+		this.io = io
+		this.isPdf = io.mime === 'application/pdf'
 		this.model = new Model()
 		this.root = h('div', { class: 'zb-root', role: 'dialog', 'aria-label': 'Zeichenbrett' })
 		this.loading = h('div', { class: 'zb-loading' }, h('div', { class: 'zb-spinner' }), h('div', { class: 'zb-loading-text' }, t('Loading {name} …', { name: node.basename })))
@@ -112,14 +110,19 @@ class Editor {
 	}
 
 	async init() {
-		const bytes = await this.download()
+		let bytes
+		try {
+			bytes = await this.io.load((f) => this.setLoading(t('Loading {name} … {percent} %', { name: this.io.name, percent: Math.round(f * 100) })))
+		} catch (e) {
+			throw new Error(t('Loading failed: {reason}', { reason: e.message }) + (e.where ? ' (' + e.where + ')' : ''))
+		}
 
 		if (this.isPdf) {
 			this.pdf = await openPdf(bytes)
 			if (this.pdf.layersJson) this.model.load(this.pdf.layersJson)
 			this.source = pdfSource(this.pdf)
 		} else {
-			this.img = await openImage(bytes, this.target.mime)
+			this.img = await openImage(bytes, this.io.mime)
 			if (this.img.layersJson) this.model.load(this.img.layersJson)
 			if (!this.model.extra || !Array.isArray(this.model.extra.orient)) this.model.extra = defaultImageState(this.img.baseMime)
 			const base = renderBase(this.img.bitmap, this.model.extra)
@@ -129,34 +132,7 @@ class Editor {
 		this.model.activeId = this.model.layers[this.model.layers.length - 1].id
 		this.buildUI()
 		this.loading.remove()
-	}
-
-	/**
-	 * Load the file. Nextcloud sends no Cache-Control header for WebDAV files, so the
-	 * browser could otherwise show a stale copy right after saving: always bypass the cache.
-	 */
-	async download() {
-		const res = await fetch(this.target.url, {
-			cache: 'no-store',
-			credentials: 'same-origin',
-			headers: { requesttoken: window.OC?.requestToken || document.head.dataset.requesttoken || '' },
-		})
-		if (!res.ok) throw new Error('HTTP ' + res.status)
-		this.target.etag = res.headers.get('etag')
-		const total = Number(res.headers.get('content-length')) || 0
-		if (!res.body || !total) return new Uint8Array(await res.arrayBuffer())
-		const out = new Uint8Array(total)
-		const reader = res.body.getReader()
-		let got = 0
-		for (;;) {
-			const { done, value } = await reader.read()
-			if (done) break
-			if (got + value.length > out.length) return new Uint8Array(await new Blob([out.subarray(0, got), value, ...await drain(reader)]).arrayBuffer())
-			out.set(value, got)
-			got += value.length
-			this.setLoading(t('Loading {name} … {percent} %', { name: this.target.name, percent: Math.round(got / total * 100) }))
-		}
-		return got === total ? out : out.subarray(0, got)
+		this.io.loaded?.()
 	}
 
 	fail(e) {
@@ -210,7 +186,7 @@ class Editor {
 		this.zoomLabel = h('button', { type: 'button', class: 'zb-btn zb-zoomlabel', title: t('Fit to width (0)'), onclick: () => this.viewer.fit('width') }, '100 %')
 
 		this.dirtyDot = h('span', { class: 'zb-dirty', title: t('Unsaved changes') })
-		this.nameEl = h('span', { class: 'zb-name' }, this.target.name)
+		this.nameEl = h('span', { class: 'zb-name' }, this.io.name)
 		this.pageLabel = this.isPdf && this.source.count > 1 ? h('span', { class: 'zb-pagelabel' }) : null
 
 		const bar = h('header', { class: 'zb-top' },
@@ -369,38 +345,26 @@ class Editor {
 
 	async save() {
 		if (this.busy) return
-		if (!this.target.canWrite) {
+		if (!this.io.canWrite) {
 			this.toast(t('You are not allowed to change this file, please save a copy.'))
 			return this.saveCopy()
 		}
-		const format = this.isPdf ? 'application/pdf' : this.imageFormatFor(this.target.mime)
-		if (!this.isPdf && format !== this.target.mime) return this.saveCopy()
+		const format = this.isPdf ? 'application/pdf' : this.imageFormatFor(this.io.mime)
+		if (!this.isPdf && format !== this.io.mime) return this.saveCopy()
 		await this.withBusy(t('Saving …'), async () => {
 			const { bytes, mime } = await this.buildFile(format)
-			await this.put(this.target.url, bytes, mime, this.target.etag)
+			let { status } = await this.io.save(bytes, mime)
+			if (status === 412) {
+				if (!confirm(t('The file was changed by someone else in the meantime. Overwrite it anyway?') + '\n\n' + t('Cancel and use "Copy" to keep both versions.'))) {
+					throw new Error(ABORTED)
+				}
+				status = (await this.io.save(bytes, mime, true)).status
+			}
+			checkStatus(status)
 			this.model.dirty = false
 			this.updateState()
 			this.toast(t('Saved'))
-			this.notifyFiles(this.target.url, 'files:node:updated')
 		})
-	}
-
-	async put(url, bytes, mime, etag) {
-		const headers = { 'Content-Type': mime }
-		if (etag) headers['If-Match'] = etag
-		let res = await axios.put(url, bytes, { headers, validateStatus: () => true })
-		if (res.status === 412) {
-			if (!confirm(t('The file was changed by someone else in the meantime. Overwrite it anyway?') + '\n\n' + t('Cancel and use "Copy" to keep both versions.'))) {
-				throw new Error(ABORTED)
-			}
-			delete headers['If-Match']
-			res = await axios.put(url, bytes, { headers, validateStatus: () => true })
-		}
-		if (res.status >= 300) {
-			const reason = res.status === 403 ? t('No permission') : res.status === 507 ? t('Not enough storage space') : res.status === 423 ? t('The file is locked') : 'HTTP ' + res.status
-			throw new Error(t('Saving failed: {reason}', { reason }))
-		}
-		if (url === this.target.url) this.target.etag = res.headers?.etag || res.headers?.['oc-etag'] || null
 	}
 
 	async withBusy(text, fn) {
@@ -418,60 +382,51 @@ class Editor {
 		}
 	}
 
-	async notifyFiles(url, event) {
-		try {
-			const node = await statNode(url)
-			if (node) emit(event, node)
-		} catch (e) {
-			console.debug('[zeichenbrett] Files-Liste nicht aktualisiert', e)
-		}
-	}
-
 	async saveCopy() {
 		if (this.busy || document.querySelector('.zb-modal')) return
-		const folderUrl = this.target.url.slice(0, this.target.url.lastIndexOf('/') + 1)
-		const davRoot = davRootOf(this.target.url)
-		const [base0, ext0] = splitName(this.target.name)
+		const io = this.io
+		const [base0, ext0] = splitName(io.name)
 		const edited = t('edited')
 		const base = base0.replace(new RegExp(' \\(' + edited.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '( \\d+)?\\)$'), '')
-		const format = this.isPdf ? 'application/pdf' : this.imageFormatFor(this.target.mime)
-		const ext = format === this.target.mime && ext0 ? ext0 : EXT[format]
+		const format = this.isPdf ? 'application/pdf' : this.imageFormatFor(io.mime)
+		const ext = format === io.mime && ext0 ? ext0 : EXT[format]
 		let suggested = `${base} (${edited}).${ext}`
-		for (let i = 2; i < 100 && await davExists(joinUrl(folderUrl, suggested)); i++) suggested = `${base} (${edited} ${i}).${ext}`
+		for (let i = 2; i < 100 && await io.exists(suggested); i++) suggested = `${base} (${edited} ${i}).${ext}`
 
-		let folder = folderUrl
-		const folderLabel = h('span', { class: 'zb-folder' }, decodeURIComponent(folder.slice(davRoot.length)) || '/')
 		const nameInput = h('input', { type: 'text', class: 'zb-input', value: suggested })
-		const ok = await modal(t('Save as copy'), [
-			h('label', { class: 'zb-field' }, h('span', {}, t('File name')), nameInput),
-			h('div', { class: 'zb-field' }, h('span', {}, t('Folder')), h('div', { class: 'zb-inline' }, folderLabel,
+		const fields = [h('label', { class: 'zb-field' }, h('span', {}, t('File name')), nameInput)]
+		if (io.canPickFolder) {
+			const folderLabel = h('span', { class: 'zb-folder' }, io.folderLabel())
+			fields.push(h('div', { class: 'zb-field' }, h('span', {}, t('Folder')), h('div', { class: 'zb-inline' }, folderLabel,
 				h('button', {
 					type: 'button', class: 'zb-btn', onclick: async () => {
-						const picked = await pickFolder(davRoot, folder)
-						if (picked) { folder = picked; folderLabel.textContent = decodeURIComponent(folder.slice(davRoot.length)) || '/' }
+						if (await io.pickFolder()) folderLabel.textContent = io.folderLabel()
 					},
-				}, t('Change …')))),
-		], [
+				}, t('Change …')))))
+		}
+		const ok = await modal(t('Save as copy'), fields, [
 			{ label: t('Cancel'), value: null },
 			{ label: t('Save'), value: true, primary: true },
 		], () => { nameInput.focus(); nameInput.setSelectionRange(0, nameInput.value.lastIndexOf('.')) })
 		if (!ok) return
 		const name = nameInput.value.trim().replace(/[/\\]/g, '_')
 		if (!name) return
-		const url = joinUrl(folder, name)
-		if (url === this.target.url) return this.save()
-		if (await davExists(url) && !confirm(t('"{name}" already exists. Overwrite it?', { name }))) return
+		if (io.isSelf(name)) return this.save()
+		let overwrite = false
+		if (await io.exists(name)) {
+			if (!confirm(t('"{name}" already exists. Overwrite it?', { name }))) return
+			overwrite = true
+		}
 		await this.withBusy(t('Saving copy …'), async () => {
 			const { bytes, mime } = await this.buildFile(format)
-			await this.put(url, bytes, mime, null)
-			this.notifyFiles(url, 'files:node:created')
+			const res = await io.writeCopy(name, bytes, mime, overwrite)
+			checkStatus(res.status)
 			// from now on Ctrl+S saves into the copy, the original stays untouched
-			const res = await davHead(url)
-			this.target = { url, name, mime, etag: res.headers.get('etag'), canWrite: true }
-			this.nameEl.textContent = name
+			this.io = res.io
+			this.nameEl.textContent = this.io.name
 			this.model.dirty = false
 			this.updateState()
-			this.toast(t('Copy saved: {name}', { name }))
+			this.toast(t('Copy saved: {name}', { name: this.io.name }))
 		})
 	}
 
@@ -499,16 +454,18 @@ class Editor {
 		this.root.remove()
 		document.body.classList.remove('zb-open')
 		current = null
+		this.io.closed?.()
 	}
 }
 
-async function drain(reader) {
-	const parts = []
-	for (;;) {
-		const { done, value } = await reader.read()
-		if (done) return parts
-		parts.push(value)
-	}
+function checkStatus(status) {
+	if (status < 300) return
+	const reason = status === 403 ? t('No permission')
+		: status === 507 ? t('Not enough storage space')
+			: status === 423 ? t('The file is locked')
+				: status === 409 ? t('A file with this name already exists.')
+					: 'HTTP ' + status
+	throw new Error(t('Saving failed: {reason}', { reason }))
 }
 
 /** Minimal promise-based modal dialog */

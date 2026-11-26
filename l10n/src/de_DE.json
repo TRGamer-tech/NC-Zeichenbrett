@@ -71,5 +71,8 @@
 	"Pen mode: on": "Stiftmodus: An",
 	"Pen mode: off": "Stiftmodus: Aus",
 	"Pen mode is on: only the pen draws, your finger scrolls and zooms. Tap to turn it off.": "Stiftmodus ist an: Nur der Stift zeichnet, der Finger scrollt und zoomt. Zum Ausschalten antippen.",
-	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "Stiftmodus ist aus: Der Finger zeichnet. Antippen, damit nur der Stift zeichnet."
+	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "Stiftmodus ist aus: Der Finger zeichnet. Antippen, damit nur der Stift zeichnet.",
+	"Loading failed: {reason}": "Laden fehlgeschlagen: {reason}",
+	"A file with this name already exists.": "Eine Datei mit diesem Namen existiert bereits.",
+	"You can close this window now.": "Sie können dieses Fenster jetzt schliessen."
 }

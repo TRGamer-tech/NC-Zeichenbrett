@@ -3,6 +3,7 @@ OC.L10N.register(
     {
         "\"Draw & annotate\" is always available in the \"…\" menu of a file.": "„Zeichnen & bearbeiten“ ist immer im „…“-Menü einer Datei verfügbar.",
         "\"{name}\" already exists. Overwrite it?": "„{name}“ existiert bereits. Überschreiben?",
+        "A file with this name already exists.": "Eine Datei mit diesem Namen existiert bereits.",
         "Administrator default (Zeichenbrett)": "Standard der Administration (Zeichenbrett)",
         "Administrator default (normal viewer)": "Standard der Administration (normale Ansicht)",
         "Cancel": "Abbrechen",
@@ -28,6 +29,7 @@ OC.L10N.register(
         "Folder": "Ordner",
         "Highlighter": "Textmarker",
         "JPEG images (.jpg, .jpeg)": "JPEG-Bilder (.jpg, .jpeg)",
+        "Loading failed: {reason}": "Laden fehlgeschlagen: {reason}",
         "Loading {name} …": "Lade {name} …",
         "Loading {name} … {percent} %": "Lade {name} … {percent} %",
         "Loading …": "Lade …",
@@ -67,6 +69,7 @@ OC.L10N.register(
         "Undo (Ctrl+Z)": "Rückgängig (Strg+Z)",
         "Unsaved changes": "Ungespeicherte Änderungen",
         "You are not allowed to change this file, please save a copy.": "Sie dürfen diese Datei nicht ändern, bitte speichern Sie eine Kopie.",
+        "You can close this window now.": "Sie können dieses Fenster jetzt schliessen.",
         "Your finger draws.": "Der Finger zeichnet.",
         "Your finger scrolls and zooms, only the pen draws.": "Der Finger scrollt und zoomt, nur der Stift zeichnet.",
         "Zeichenbrett": "Zeichenbrett",

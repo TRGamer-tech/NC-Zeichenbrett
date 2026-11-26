@@ -4,6 +4,12 @@
 -->
 # Changelog
 
+## 1.4.0
+- Nextcloud mobile apps (Android, iOS): Zeichenbrett is offered under "Edit" through Nextcloud's Direct Editing. File types set to open in Zeichenbrett (admin default or personal setting) are preferred over office editors, all other supported types are offered as an alternative
+- The editor page in the apps works without a login session: loading and saving use short-lived signed tokens bound to one user and one file, with brute-force protection
+- Fixed: opening a saved copy could fail with 404 when a cache (browser, reverse proxy or CDN) had stored the "does this name exist" answer. Existence checks now use PROPFIND and downloads use a unique URL, neither can be answered from a cache
+- File names with %, # or ? are handled correctly
+
 ## 1.3.1
 - Fixed: after an update, browsers kept running the previous editor version from their cache (Nextcloud caches app scripts for 6 months). Editor, PDF worker and settings icon are now loaded with the app version in the URL. This also caused the 404 when reopening a copy and the black settings icon
 - Fixed: the "does this file name exist" check could be answered from the browser cache

@@ -2,6 +2,7 @@
     "translations": {
         "\"Draw & annotate\" is always available in the \"…\" menu of a file.": "« Dessiner et annoter » est toujours disponible dans le menu « … » d’un fichier.",
         "\"{name}\" already exists. Overwrite it?": "« {name} » existe déjà. L’écraser ?",
+        "A file with this name already exists.": "Un fichier portant ce nom existe déjà.",
         "Administrator default (Zeichenbrett)": "Valeur par défaut de l’administration (Zeichenbrett)",
         "Administrator default (normal viewer)": "Valeur par défaut de l’administration (visionneuse normale)",
         "Cancel": "Annuler",
@@ -27,6 +28,7 @@
         "Folder": "Dossier",
         "Highlighter": "Surligneur",
         "JPEG images (.jpg, .jpeg)": "Images JPEG (.jpg, .jpeg)",
+        "Loading failed: {reason}": "Échec du chargement : {reason}",
         "Loading {name} …": "Chargement de {name} …",
         "Loading {name} … {percent} %": "Chargement de {name} … {percent} %",
         "Loading …": "Chargement …",
@@ -66,6 +68,7 @@
         "Undo (Ctrl+Z)": "Annuler (Ctrl+Z)",
         "Unsaved changes": "Modifications non enregistrées",
         "You are not allowed to change this file, please save a copy.": "Vous n’avez pas le droit de modifier ce fichier, veuillez enregistrer une copie.",
+        "You can close this window now.": "Vous pouvez maintenant fermer cette fenêtre.",
         "Your finger draws.": "Le doigt dessine.",
         "Your finger scrolls and zooms, only the pen draws.": "Le doigt fait défiler et zoome, seul le stylet dessine.",
         "Zeichenbrett": "Zeichenbrett",

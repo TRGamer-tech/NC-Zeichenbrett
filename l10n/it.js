@@ -3,6 +3,7 @@ OC.L10N.register(
     {
         "\"Draw & annotate\" is always available in the \"…\" menu of a file.": "«Disegna e annota» è sempre disponibile nel menu «…» di un file.",
         "\"{name}\" already exists. Overwrite it?": "«{name}» esiste già. Sovrascriverlo?",
+        "A file with this name already exists.": "Esiste già un file con questo nome.",
         "Administrator default (Zeichenbrett)": "Impostazione predefinita dell’amministrazione (Zeichenbrett)",
         "Administrator default (normal viewer)": "Impostazione predefinita dell’amministrazione (visualizzatore normale)",
         "Cancel": "Annulla",
@@ -28,6 +29,7 @@ OC.L10N.register(
         "Folder": "Cartella",
         "Highlighter": "Evidenziatore",
         "JPEG images (.jpg, .jpeg)": "Immagini JPEG (.jpg, .jpeg)",
+        "Loading failed: {reason}": "Caricamento non riuscito: {reason}",
         "Loading {name} …": "Caricamento di {name} …",
         "Loading {name} … {percent} %": "Caricamento di {name} … {percent} %",
         "Loading …": "Caricamento …",
@@ -67,6 +69,7 @@ OC.L10N.register(
         "Undo (Ctrl+Z)": "Annulla (Ctrl+Z)",
         "Unsaved changes": "Modifiche non salvate",
         "You are not allowed to change this file, please save a copy.": "Non hai il permesso di modificare questo file, salva una copia.",
+        "You can close this window now.": "Ora puoi chiudere questa finestra.",
         "Your finger draws.": "Il dito disegna.",
         "Your finger scrolls and zooms, only the pen draws.": "Il dito scorre e ingrandisce, solo la penna disegna.",
         "Zeichenbrett": "Zeichenbrett",

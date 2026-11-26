@@ -23,6 +23,8 @@ const common = {
 const builds = [
 	// tiny bootstrap for the Files app (classic script)
 	{ ...common, entryPoints: ['src/main.js'], outfile: 'js/zeichenbrett-main.js', format: 'iife' },
+	// page opened by the mobile apps (Direct Editing)
+	{ ...common, entryPoints: ['src/direct.js'], outfile: 'js/zeichenbrett-direct.js', format: 'iife' },
 	// admin + personal settings page
 	{ ...common, entryPoints: ['src/settings.js'], outfile: 'js/zeichenbrett-settings.js', format: 'iife' },
 	// the editor, loaded on demand via import()

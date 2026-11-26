@@ -37,6 +37,14 @@ Supports Nextcloud 31 to 35.
 | Space or right mouse (hold) | Pan | Ctrl+wheel, + / - / 0 | Zoom |
 | Page Up / Down | Previous / next page | Esc | Close |
 
+## Mobile apps (Android, iOS)
+
+The Nextcloud apps do not run the web interface's file menu, they use Nextcloud's **Direct Editing** instead. Zeichenbrett registers there, so it appears under **Edit** in the app's file menu and opens in the app's built-in web view.
+
+- File types set to open in Zeichenbrett (admin default or personal setting) are reported as preferred, so the app picks Zeichenbrett over office editors for them. Other supported types are offered as an alternative only.
+- The web view has no login session. Loading and saving use a token that is signed with the instance secret, bound to one user and one file and valid for 12 hours. Invalid tokens are subject to Nextcloud's brute-force protection.
+- "Copy" saves next to the original file (no folder selection in the app).
+
 ## Installation
 
 ### From the App Store
@@ -72,7 +80,7 @@ Translations are in `l10n/src/<language>.json`. `node scripts/l10n.mjs --list` p
 
 ### How it works
 
-- `lib/`: a little PHP. Loads a ~20 KB bootstrap script into Files, stores the default-viewer settings, allows the pdf.js worker in the CSP.
+- `lib/`: a little PHP. Loads a ~20 KB bootstrap script into Files, stores the default-viewer settings, allows the pdf.js worker in the CSP, and provides the Direct Editing editor plus its token-protected endpoints (`DirectController`, `DirectSessionService`).
 - `src/main.js`: registers the **…** menu action and a hidden default action. The default action uses a very low `order`, so Files picks it before the Viewer's (and thereby `files_pdfviewer`'s) default action.
 - `src/editor/`: the editor, no framework. pdf.js renders, pdf-lib writes (lazy loaded).
   - **PDF:** every annotated page gets one Form XObject with the drawing, bound to an Optional Content Group. A private catalog entry lists every object that was added plus the drawing as JSON. On reopen exactly those objects are removed, so the original stays untouched.
