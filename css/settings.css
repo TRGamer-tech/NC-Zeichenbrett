@@ -1,0 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 TRGamer-tech */
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+.zeichenbrett-table td { padding: 4px 16px 4px 0; vertical-align: middle; }
+.zeichenbrett-table select { min-width: 280px; }
+.zeichenbrett-settings .zeichenbrett-status { display: inline-block; margin-top: 8px; }
+.zeichenbrett-settings .zeichenbrett-status:empty { display: none; }
