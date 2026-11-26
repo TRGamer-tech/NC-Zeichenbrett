@@ -13,6 +13,7 @@
 
 * **Draw anywhere:** strokes are never selectable boxes, so putting the pen down always draws. No more old lines that move when you start a new one on top of them.
 * **Pen, highlighter and an eraser** that removes exactly what it touches, even parts of a line
+* **Text fields** you can add, edit, move and remove at any time; in PDFs they are real, searchable text
 * **Colors that just work,** three line widths, undo and redo
 * **Save or save as copy, at any time,** as often as you like, also after saving
 * **Fast:** opens in a fraction of a second, pages are rendered on demand and stay sharp at any zoom level
@@ -26,6 +27,7 @@ Open a file from the "…" menu with **Draw & annotate**, or simply click it if 
 
 * **Überall zeichnen:** Striche sind nie auswählbare Rahmen. Wo du den Stift ansetzt, wird gezeichnet. Keine alten Linien mehr, die sich verschieben, wenn du darauf neu ansetzt.
 * **Stift, Textmarker und Radierer,** der genau das entfernt, was er berührt, auch nur Teile einer Linie
+* **Textfelder,** die du jederzeit hinzufügen, bearbeiten, verschieben und entfernen kannst; in PDFs sind sie echter, durchsuchbarer Text
 * **Farben, die einfach funktionieren,** drei Strichstärken, Rückgängig und Wiederholen
 * **Speichern oder als Kopie speichern, jederzeit,** so oft du willst, auch nach dem Speichern
 * **Schnell:** öffnet in Sekundenbruchteilen, Seiten werden bei Bedarf gerendert und bleiben bei jedem Zoom scharf
@@ -35,7 +37,7 @@ Open a file from the "…" menu with **Draw & annotate**, or simply click it if 
 * Funktioniert in den Nextcloud-Apps für Android und iOS: unter „Bearbeiten“ im Dateimenü
 
 Öffne eine Datei über das „…“-Menü mit **Zeichnen & bearbeiten**, oder klicke sie einfach an, wenn Zeichenbrett als Standard eingestellt ist.]]></description>
-	<version>1.4.1</version>
+	<version>1.5.0</version>
 	<licence>agpl</licence>
 	<author homepage="https://github.com/TRGamer-tech">TRGamer-tech</author>
 	<namespace>Zeichenbrett</namespace>

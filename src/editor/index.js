@@ -12,6 +12,7 @@ import { setPdfWorker, openPdf, exportPdf, pdfSource } from './pdfdoc.js'
 import { openImage, exportImage, imageSource, renderBase, defaultImageState, cssFilter } from './imagedoc.js'
 import { t } from '../l10n.js'
 import { DavIO, DirectIO } from './io.js'
+import { TextField } from './textedit.js'
 
 export { DirectIO }
 
@@ -22,6 +23,7 @@ const SIZES = {
 	pen: { key: 'width', values: [2, 4, 8] },
 	marker: { key: 'markerWidth', values: [10, 20, 36] },
 	eraser: { key: 'eraserSize', values: [12, 30, 70] },
+	text: { key: 'fontSize', values: [14, 22, 36] },
 }
 const SETTINGS_KEY = 'zeichenbrett.settings.v2'
 const ABORTED = 'zeichenbrett-aborted'
@@ -31,7 +33,7 @@ let styleInjected = false
 let current = null
 
 function loadSettings() {
-	const d = { tool: 'pen', color: '#e53935', width: 4, markerWidth: 20, eraserSize: 30, fingerMode: 'auto', penSeen: false }
+	const d = { tool: 'pen', color: '#e53935', width: 4, markerWidth: 20, eraserSize: 30, fontSize: 22, fingerMode: 'auto', penSeen: false }
 	try { return { ...d, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } } catch (e) { return d }
 }
 function storeSettings(s) {
@@ -181,8 +183,8 @@ class Editor {
 		// touch devices: switch between "finger draws" and "finger scrolls (only the pen draws)"
 
 
-		this.undoBtn = iconBtn('undo', t('Undo (Ctrl+Z)'), () => this.model.undo())
-		this.redoBtn = iconBtn('redo', t('Redo (Ctrl+Y)'), () => this.model.redo())
+		this.undoBtn = iconBtn('undo', t('Undo (Ctrl+Z)'), () => { this.commitText(); this.model.undo() })
+		this.redoBtn = iconBtn('redo', t('Redo (Ctrl+Y)'), () => { this.commitText(); this.model.redo() })
 		this.zoomLabel = h('button', { type: 'button', class: 'zb-btn zb-zoomlabel', title: t('Fit to width (0)'), onclick: () => this.viewer.fit('width') }, '100 %')
 
 		this.dirtyDot = h('span', { class: 'zb-dirty', title: t('Unsaved changes') })
@@ -209,8 +211,14 @@ class Editor {
 
 		this.viewer = new Viewer(this.stage, this.source, this.model)
 		if (Array.isArray(window.__zbStats)) { window.__zbModel = this.model; window.__zbSource = this.source } // test hooks
-		this.viewer.onZoom = (sc) => { this.zoomLabel.textContent = Math.round(sc * 100) + ' %' }
+		this.viewer.onZoom = (sc) => {
+			this.zoomLabel.textContent = Math.round(sc * 100) + ' %'
+			this.textField?.position()
+		}
+		this.viewer.scroller.addEventListener('scroll', () => this.textField?.position(), { passive: true })
 		this.tools = new Tools(this.viewer, this.model, s, {
+			onTextTap: (item, at) => this.openText(item, at),
+			beforeTextPointer: () => this.commitText(),
 			onPenDetected: () => {
 				storeSettings(this.settings)
 				this.updateFingerUI()
@@ -224,6 +232,27 @@ class Editor {
 		this.updateFingerUI()
 		this.updateState()
 		this.updatePageLabel()
+	}
+
+	// ============================================================ text fields
+	/** edit an existing text field (item) or create a new one at document point `at` */
+	openText(item, at) {
+		this.commitText()
+		this.textField = new TextField({
+			viewer: this.viewer,
+			model: this.model,
+			stage: this.stage,
+			item,
+			at,
+			color: this.settings.color,
+			size: this.settings.fontSize / this.viewer.scale,
+			onClose: () => { this.textField = null },
+		})
+	}
+
+	/** close an open text field, keeping what was typed */
+	commitText() {
+		this.textField?.close(true)
 	}
 
 	updateFingerUI() {
@@ -244,6 +273,7 @@ class Editor {
 	}
 
 	setTool(t) {
+		this.commitText()
 		this.settings.tool = t
 		this.tools.setTool(t)
 		for (const [k, b] of Object.entries(this.toolButtons)) b.classList.toggle('zb-active', k === t)
@@ -256,6 +286,7 @@ class Editor {
 		this.colorInput.value = c
 		for (const sw of this.swatches) sw.classList.toggle('zb-active', sw.dataset.color.toLowerCase() === c.toLowerCase())
 		if (this.settings.tool === 'eraser') this.setTool('pen')
+		this.textField?.setColor(c)
 		this.updateSizeUI()
 		storeSettings(this.settings)
 	}
@@ -263,6 +294,7 @@ class Editor {
 	setSize(i) {
 		const { key, values } = SIZES[this.settings.tool]
 		this.settings[key] = values[i]
+		if (this.settings.tool === 'text') this.textField?.setSize(values[i] / this.viewer.scale)
 		this.updateSizeUI()
 		storeSettings(this.settings)
 	}
@@ -302,13 +334,14 @@ class Editor {
 		}
 		if (document.querySelector('.zb-modal')) return
 		const tag = e.target?.tagName
-		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-		e.stopPropagation()
 		const mod = e.ctrlKey || e.metaKey
 		const k = e.key.toLowerCase()
-		if (mod && k === 's') { e.preventDefault(); if (e.shiftKey) this.saveCopy(); else this.save(); return }
-		if (mod && k === 'z') { e.preventDefault(); if (e.shiftKey) this.model.redo(); else this.model.undo(); return }
-		if (mod && k === 'y') { e.preventDefault(); this.model.redo(); return }
+		// Ctrl+S also works while typing in a text field
+		if (mod && k === 's') { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) this.saveCopy(); else this.save(); return }
+		if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+		e.stopPropagation()
+		if (mod && k === 'z') { e.preventDefault(); this.commitText(); if (e.shiftKey) this.model.redo(); else this.model.undo(); return }
+		if (mod && k === 'y') { e.preventDefault(); this.commitText(); this.model.redo(); return }
 		if (mod) return
 		if (e.key === ' ') { e.preventDefault(); this.tools.spaceDown = true; this.tools.updateCursor(); return }
 		if (e.key === 'Escape') { this.close(); return }
@@ -345,6 +378,7 @@ class Editor {
 
 	async save() {
 		if (this.busy) return
+		this.commitText()
 		if (!this.io.canWrite) {
 			this.toast(t('You are not allowed to change this file, please save a copy.'))
 			return this.saveCopy()
@@ -388,6 +422,7 @@ class Editor {
 
 	async saveCopy() {
 		if (this.busy || document.querySelector('.zb-modal')) return
+		this.commitText()
 		const io = this.io
 		const [base0, ext0] = splitName(io.name)
 		const edited = t('edited')
@@ -439,6 +474,7 @@ class Editor {
 	// ============================================================== closing
 	async close() {
 		if (this.busy) return
+		this.commitText()
 		if (this.model.dirty) {
 			const r = await modal(t('Unsaved changes'), [h('p', {}, t('Do you want to save your changes?'))], [
 				{ label: t('Discard'), value: 'discard' },

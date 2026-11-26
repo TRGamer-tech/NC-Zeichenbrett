@@ -5,6 +5,8 @@
 //
 //   pen / marker : draw (hold Shift for a straight line)
 //   eraser       : removes only what it touches, on all drawings
+//   text         : tap = new text field or edit an existing one, drag a text field = move it.
+//                  Text fields can only be grabbed with this tool, never while drawing.
 //   two fingers, middle/right mouse button, Space + drag : pan,  Ctrl + wheel / pinch : zoom
 //
 // Stylus devices (S Pen, Surface Pen, Lenovo/Wacom pens, Apple Pencil: all report
@@ -12,7 +14,7 @@
 // (remembered per device). settings.fingerMode = 'auto' | 'draw' | 'scroll'.
 
 import { uid } from './model.js'
-import { simplify, eraseStrokePartially, itemHit } from './geometry.js'
+import { simplify, eraseStrokePartially, itemHit, textCorners } from './geometry.js'
 import { drawItem } from './render.js'
 import { t } from '../l10n.js'
 
@@ -20,7 +22,10 @@ export const TOOLS = {
 	pen: { label: () => t('Pen'), key: 'p' },
 	marker: { label: () => t('Highlighter'), key: 'm' },
 	eraser: { label: () => t('Eraser'), key: 'e' },
+	text: { label: () => t('Text'), key: 't' },
 }
+
+const TAP_SLOP = 8 // px a tap may move before it counts as a drag
 
 export class Tools {
 	constructor(viewer, model, settings, hooks = {}) {
@@ -51,13 +56,27 @@ export class Tools {
 	}
 
 	updateCursor() {
-		this.v.scroller.style.cursor = this.spaceDown ? 'grab' : this.s.tool === 'eraser' ? 'none' : 'crosshair'
+		this.v.scroller.style.cursor = this.spaceDown ? 'grab' : this.s.tool === 'eraser' ? 'none' : this.s.tool === 'text' ? 'text' : 'crosshair'
 	}
 
 	/** length in document units for a length in screen pixels at the current zoom */
 	docLen(px) { return px / this.v.scale }
 
 	touches() { return [...this.pointers.values()].filter((p) => p.type === 'touch') }
+
+	/** topmost text field under a document point (visible, unlocked layers only) */
+	findText(pt) {
+		const r = this.docLen(6)
+		for (let li = this.model.layers.length - 1; li >= 0; li--) {
+			const layer = this.model.layers[li]
+			if (!layer.visible || layer.locked) continue
+			for (let k = layer.items.length - 1; k >= 0; k--) {
+				const it = layer.items[k]
+				if (it.type === 'text' && it.page === pt.page && itemHit(it, pt.x, pt.y, pt.x, pt.y, r)) return it
+			}
+		}
+		return null
+	}
 
 	/** Does a single finger draw (true) or pan (false)? */
 	fingerDraws() {
@@ -124,7 +143,8 @@ export class Tools {
 		if (this.action?.type === 'pinch') return
 
 		const isPen = e.pointerType === 'pen'
-		const fingerPans = e.pointerType === 'touch' && !this.fingerDraws()
+		// with the text tool a finger may also place text: tap vs. drag is decided on the way
+		const fingerPans = e.pointerType === 'touch' && !this.fingerDraws() && this.s.tool !== 'text'
 		if (e.button === 1 || (e.button === 2 && !isPen) || this.spaceDown || fingerPans) {
 			this.action = { type: 'pan', id: e.pointerId, x: e.clientX, y: e.clientY, pointerType: e.pointerType, samples: [] }
 			this.v.scroller.style.cursor = 'grabbing'
@@ -136,6 +156,12 @@ export class Tools {
 		if (e.button !== 0 && !penEraser) return
 
 		const pt = this.v.toDoc(e.clientX, e.clientY)
+		if (this.s.tool === 'text' && !penEraser) {
+			this.hooks.beforeTextPointer?.()
+			const hit = this.findText(pt)
+			this.action = { type: 'text', id: e.pointerId, pointerType: e.pointerType, cx: e.clientX, cy: e.clientY, x: e.clientX, y: e.clientY, pt, hit, page: hit ? hit.page : pt.page, samples: [] }
+			return
+		}
 		if (penEraser || this.s.tool === 'eraser') {
 			this.model.beginGesture()
 			this.action = { type: 'erase', id: e.pointerId, page: pt.page, lx: pt.x, ly: pt.y, pointerType: e.pointerType }
@@ -176,6 +202,31 @@ export class Tools {
 			if (a.samples.length > 8) a.samples.shift()
 			return
 		}
+		if (a.type === 'text') {
+			if (!a.moved && Math.hypot(e.clientX - a.cx, e.clientY - a.cy) < TAP_SLOP) return
+			if (!a.moved) {
+				a.moved = true
+				if (a.hit) {
+					a.layer = this.model.layerOf(a.hit.id)
+					this.model.beginGesture()
+				}
+			}
+			if (a.hit && a.layer) {
+				// move the text field with the pointer
+				const now = this.v.toDoc(e.clientX, e.clientY, a.page)
+				const moved = { ...a.hit, x: a.hit.x + now.x - a.pt.x, y: a.hit.y + now.y - a.pt.y }
+				this.model.gestureSetItems(a.layer, a.layer.items.map((it) => (it.id === a.hit.id ? moved : it)))
+			} else {
+				// drag on empty space: scroll
+				this.v.scroller.scrollLeft -= e.clientX - a.x
+				this.v.scroller.scrollTop -= e.clientY - a.y
+				a.samples.push({ t: performance.now(), x: e.clientX, y: e.clientY })
+				if (a.samples.length > 8) a.samples.shift()
+			}
+			a.x = e.clientX; a.y = e.clientY
+			this.v.requestLive()
+			return
+		}
 		const evs = e.getCoalescedEvents?.() || []
 		for (const ev of (evs.length ? evs : [e])) {
 			const pt = this.v.toDoc(ev.clientX, ev.clientY, a.page)
@@ -206,6 +257,15 @@ export class Tools {
 			if (a.pointerType === 'touch' && e.type !== 'pointercancel') this.startInertia(a.samples)
 		}
 		else if (a.type === 'erase') this.model.endGesture()
+		else if (a.type === 'text') {
+			if (a.moved && a.hit && a.layer) this.model.endGesture()
+			else if (a.moved && a.pointerType === 'touch' && e.type !== 'pointercancel') this.startInertia(a.samples)
+			else if (!a.moved && e.type !== 'pointercancel') {
+				// tap: edit the tapped text field, or create a new one (only on a page)
+				if (a.hit) this.hooks.onTextTap?.(a.hit, null)
+				else if (a.pt.inside) this.hooks.onTextTap?.(null, a.pt)
+			}
+		}
 		else if (a.type === 'draw' && e.type !== 'pointercancel') {
 			const it = this.buildItem(a)
 			if (it) this.model.addItem(it)
@@ -215,6 +275,7 @@ export class Tools {
 
 	cancelAction() {
 		if (this.action?.type === 'erase') this.model.endGesture()
+		if (this.action?.type === 'text' && this.action.moved && this.action.layer) this.model.endGesture()
 		this.action = null
 		this.v.requestLive()
 	}
@@ -253,7 +314,7 @@ export class Tools {
 					if (res === null) out.push(it)
 					else { changed = true; out.push(...res) }
 				} else if (itemHit(it, a.lx, a.ly, x, y, r)) {
-					changed = true // text from older versions: removed as a whole
+					changed = true // text fields are removed as a whole
 				} else {
 					out.push(it)
 				}
@@ -269,6 +330,7 @@ export class Tools {
 			this.v.clipToPage(ctx, a.page)
 			drawItem(ctx, this.buildItem(a), this.v.deviceMatrix(a.page))
 		}
+		if (this.s.tool === 'text') this.drawTextFrames(ctx)
 		if (this.s.tool === 'eraser' && this.hover) {
 			const r = this.v.overlay.getBoundingClientRect()
 			const d = this.v.dpr
@@ -281,6 +343,34 @@ export class Tools {
 			ctx.setLineDash([3 * d, 3 * d])
 			ctx.strokeStyle = 'rgba(255,255,255,0.9)'
 			ctx.stroke()
+		}
+	}
+}
+
+Tools.prototype.drawTextFrames = function (ctx) {
+	// dashed frames show which text fields can be tapped / dragged
+	const d = this.v.dpr
+	for (const i of this.v.visibleRange(0)) {
+		const m = this.v.deviceMatrix(i)
+		for (const layer of this.model.layers) {
+			if (!layer.visible || layer.locked) continue
+			for (const it of this.v.itemsOnPage(layer, i)) {
+				if (it.type !== 'text' || it.id === this.v.hiddenItemId) continue
+				const pad = this.docLen(3)
+				const c = textCorners({ ...it, x: it.x - (it.ux + it.vx) * pad, y: it.y - (it.uy + it.vy) * pad, w: it.w + 2 * pad, h: it.h + 2 * pad })
+				ctx.setTransform(1, 0, 0, 1, 0, 0)
+				ctx.beginPath()
+				c.forEach(([x, y], k) => {
+					const px = m[0] * x + m[2] * y + m[4]; const py = m[1] * x + m[3] * y + m[5]
+					if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py)
+				})
+				ctx.closePath()
+				ctx.lineWidth = d
+				ctx.setLineDash([4 * d, 3 * d])
+				ctx.strokeStyle = 'rgba(0, 103, 158, 0.9)'
+				ctx.stroke()
+				ctx.setLineDash([])
+			}
 		}
 	}
 }

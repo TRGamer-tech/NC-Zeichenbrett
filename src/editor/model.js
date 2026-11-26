@@ -80,6 +80,23 @@ export class Model {
 		this.emit('items')
 	}
 
+	replaceItem(layer, oldItem, newItem) {
+		this.checkpoint()
+		layer.items = layer.items.map((it) => (it === oldItem || it.id === oldItem.id ? newItem : it))
+		this.emit('items')
+	}
+
+	removeItem(layer, item) {
+		this.checkpoint()
+		layer.items = layer.items.filter((it) => it !== item && it.id !== item.id)
+		this.emit('items')
+	}
+
+	/** layer that contains the item with this id */
+	layerOf(id) {
+		return this.layers.find((l) => l.items.some((it) => it.id === id))
+	}
+
 	/** Multi-step edits (eraser drag) that should become ONE undo step. */
 	beginGesture() {
 		this.checkpoint()

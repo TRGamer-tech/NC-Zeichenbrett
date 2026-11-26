@@ -75,5 +75,9 @@
 	"You can close this window now.": "Ora puoi chiudere questa finestra.",
 	"Preparing file …": "Preparazione del file …",
 	"Saving … {percent} %": "Salvataggio … {percent} %",
-	"Saving copy … {percent} %": "Salvataggio della copia … {percent} %"
+	"Saving copy … {percent} %": "Salvataggio della copia … {percent} %",
+	"Text": "Testo",
+	"Done": "Fatto",
+	"Delete": "Elimina",
+	"Type here …": "Scrivi qui …"
 }

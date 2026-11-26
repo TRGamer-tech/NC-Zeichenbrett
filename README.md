@@ -14,6 +14,7 @@ Zeichenbrett fixes exactly that and stays out of your way:
 
 - **Draw anywhere.** Strokes are never selectable boxes. Where you put the pen down, it draws.
 - **Pen, highlighter, eraser.** The eraser removes exactly what it touches, even just part of a line.
+- **Text fields.** With the text tool, tap to add a text field, tap one to edit its text, colour or size, drag it to move it. Only the text tool can grab text fields, so drawing never moves them. In PDFs they become real, searchable text.
 - **Colors that work**, three line widths, undo and redo.
 - **Save, or save as copy, at any time**, as often as you like, also after you have already saved.
 - **Fast.** Opens in a fraction of a second (pdf-lib is only loaded when saving). Pages render on demand and stay sharp at any zoom, even on large CAD plans: when zooming in, only the visible part is re-rendered, and only the drawing operations inside it are executed.
@@ -31,11 +32,12 @@ Supports Nextcloud 31 to 35.
 
 | Key | Action | Key | Action |
 |---|---|---|---|
-| P / M / E | Pen / highlighter / eraser | Ctrl+Z / Ctrl+Y | Undo / redo |
+| P / M / E / T | Pen / highlighter / eraser / text | Ctrl+Z / Ctrl+Y | Undo / redo |
 | 1 / 2 / 3 | Thin / medium / thick | Ctrl+S | Save |
 | Shift (hold) | Straight line | Ctrl+Shift+S | Save as copy |
 | Space or right mouse (hold) | Pan | Ctrl+wheel, + / - / 0 | Zoom |
 | Page Up / Down | Previous / next page | Esc | Close |
+| Ctrl+Enter (text field) | Done | Esc (text field) | Cancel |
 
 ## Mobile apps (Android, iOS)
 
@@ -88,6 +90,8 @@ Translations are in `l10n/src/<language>.json`. `node scripts/l10n.mjs --list` p
 - Files are read and written over WebDAV, `If-Match` prevents overwriting somebody else's changes.
 
 ## Known limitations
+
+- Text in PDFs uses the standard font Helvetica. Characters outside Western European (e.g. emoji) are saved as `?`.
 
 - Encrypted / password protected PDFs can be viewed but not saved.
 - WebP images: the drawing is burnt in (no longer erasable). PNG and JPEG stay editable but grow a bit, because the original is stored with them.

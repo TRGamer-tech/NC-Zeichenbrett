@@ -481,7 +481,9 @@ export class Viewer {
 			this.clipToPage(ctx, i)
 			for (const layer of this.model.layers) {
 				if (!layer.visible) continue
-				const items = this.itemsOnPage(layer, i)
+				let items = this.itemsOnPage(layer, i)
+				// the text field being edited is shown by the text editor, not the canvas
+				if (this.hiddenItemId) items = items.filter((it) => it.id !== this.hiddenItemId)
 				if (items.length) drawItems(ctx, items, m, layer.opacity)
 			}
 			ctx.restore()
