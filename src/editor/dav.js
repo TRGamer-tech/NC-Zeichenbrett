@@ -17,9 +17,18 @@ export function joinUrl(folderUrl, name) {
 	return folderUrl.replace(/\/?$/, '/') + encodeURIComponent(name)
 }
 
+/** HEAD request that never uses the browser cache (Nextcloud sends no Cache-Control for DAV files) */
+export function davHead(url) {
+	return fetch(url, {
+		method: 'HEAD',
+		cache: 'no-store',
+		credentials: 'same-origin',
+		headers: { requesttoken: window.OC?.requestToken || document.head.dataset.requesttoken || '' },
+	})
+}
+
 export async function davExists(url) {
-	const res = await axios.request({ method: 'HEAD', url, validateStatus: () => true })
-	return res.status >= 200 && res.status < 300
+	return (await davHead(url)).ok
 }
 
 /** Build a Files-app Node for a DAV URL (used to refresh the file list). */

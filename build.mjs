@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Build: node build.mjs [--watch]
 import * as esbuild from 'esbuild'
-import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
+import { copyFileSync, cpSync, mkdirSync, rmSync } from 'node:fs'
 
 const watch = process.argv.includes('--watch')
 const prod = !watch
@@ -31,6 +31,10 @@ const builds = [
 
 // pdf.js worker. Copied with a .js extension so every web server sends a JavaScript MIME type
 copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'js/pdf.worker.min.js')
+// pdf.js helper data: WebAssembly decoders, standard fonts, CJK character maps, ICC profiles
+for (const dir of ['wasm', 'standard_fonts', 'cmaps', 'iccs']) {
+	cpSync(`node_modules/pdfjs-dist/${dir}`, `js/pdfjs/${dir}`, { recursive: true })
+}
 
 if (watch) {
 	for (const b of builds) (await esbuild.context(b)).watch()

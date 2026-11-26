@@ -13,7 +13,7 @@ import { Tools, TOOLS } from './tools.js'
 import { setPdfWorker, openPdf, exportPdf, pdfSource } from './pdfdoc.js'
 import { openImage, exportImage, imageSource, renderBase, defaultImageState, cssFilter } from './imagedoc.js'
 import { t } from '../l10n.js'
-import { pickFolder, davRootOf, davExists, statNode, joinUrl } from './dav.js'
+import { pickFolder, davRootOf, davExists, davHead, statNode, joinUrl } from './dav.js'
 
 const APP_ID = 'zeichenbrett'
 const PERM_UPDATE = 2
@@ -64,13 +64,13 @@ function splitName(name) {
 	return i > 0 ? [name.slice(0, i), name.slice(i + 1)] : [name, '']
 }
 
-export async function openEditor(node) {
+export async function openEditor(node, { version = '' } = {}) {
 	if (current) return
 	if (!styleInjected) {
 		document.head.append(h('style', { id: 'zeichenbrett-style' }, css))
 		styleInjected = true
 	}
-	setPdfWorker(generateFilePath(APP_ID, '', 'js/pdf.worker.min.js'))
+	setPdfWorker(generateFilePath(APP_ID, '', 'js/pdf.worker.min.js') + '?v=' + encodeURIComponent(version), generateFilePath(APP_ID, '', 'js/pdfjs/'))
 	current = new Editor(node)
 	try {
 		await current.init()
@@ -171,11 +171,24 @@ class Editor {
 	buildUI() {
 		const s = this.settings
 		this.toolButtons = {}
+		this.fingerBtn = null
+		if (navigator.maxTouchPoints > 0) {
+			this.fingerLabel = h('span', { class: 'zb-keep' })
+			this.fingerBtn = iconBtn('pan', '', () => {
+				this.settings.fingerMode = this.tools.fingerDraws() ? 'scroll' : 'draw'
+				storeSettings(this.settings)
+				this.updateFingerUI()
+				this.toast(this.tools.fingerDraws() ? t('Your finger draws.') : t('Your finger scrolls and zooms, only the pen draws.'))
+			})
+			this.fingerBtn.classList.add('zb-penmode')
+			this.fingerBtn.append(this.fingerLabel)
+		}
 		const tools = h('div', { class: 'zb-group' }, Object.keys(TOOLS).map((tool) => {
 			const b = iconBtn(tool, `${TOOLS[tool].label()} (${TOOLS[tool].key.toUpperCase()})`, () => this.setTool(tool))
 			this.toolButtons[tool] = b
-			return b
-		}))
+			// finger mode switch sits right next to the pen
+			return tool === 'pen' && this.fingerBtn ? [b, this.fingerBtn] : b
+		}).flat())
 
 		this.colorInput = h('input', { type: 'color', value: s.color, title: t('Custom color'), class: 'zb-colorinput' })
 		this.colorInput.addEventListener('input', () => this.setColor(this.colorInput.value))
@@ -190,15 +203,7 @@ class Editor {
 		const sizes = h('div', { class: 'zb-group' }, this.sizeButtons)
 
 		// touch devices: switch between "finger draws" and "finger scrolls (only the pen draws)"
-		this.fingerBtn = null
-		if (navigator.maxTouchPoints > 0) {
-			this.fingerBtn = iconBtn('pan', '', () => {
-				this.settings.fingerMode = this.tools.fingerDraws() ? 'scroll' : 'draw'
-				storeSettings(this.settings)
-				this.updateFingerUI()
-				this.toast(this.tools.fingerDraws() ? t('Your finger draws.') : t('Your finger scrolls and zooms, only the pen draws.'))
-			})
-		}
+
 
 		this.undoBtn = iconBtn('undo', t('Undo (Ctrl+Z)'), () => this.model.undo())
 		this.redoBtn = iconBtn('redo', t('Redo (Ctrl+Y)'), () => this.model.redo())
@@ -211,7 +216,6 @@ class Editor {
 		const bar = h('header', { class: 'zb-top' },
 			h('div', { class: 'zb-title' }, this.dirtyDot, this.nameEl, this.pageLabel),
 			tools, colors, sizes,
-			this.fingerBtn && h('div', { class: 'zb-group' }, this.fingerBtn),
 			h('div', { class: 'zb-group' }, this.undoBtn, this.redoBtn),
 			h('div', { class: 'zb-group zb-zoomgroup' },
 				iconBtn('zoomOut', t('Zoom out (-)'), () => this.viewer.zoomBy(1 / 1.25)),
@@ -228,7 +232,7 @@ class Editor {
 		this.root.append(bar, this.stage, this.toastEl)
 
 		this.viewer = new Viewer(this.stage, this.source, this.model)
-		if (Array.isArray(window.__zbStats)) window.__zbModel = this.model // test hook
+		if (Array.isArray(window.__zbStats)) { window.__zbModel = this.model; window.__zbSource = this.source } // test hooks
 		this.viewer.onZoom = (sc) => { this.zoomLabel.textContent = Math.round(sc * 100) + ' %' }
 		this.tools = new Tools(this.viewer, this.model, s, {
 			onPenDetected: () => {
@@ -248,12 +252,15 @@ class Editor {
 
 	updateFingerUI() {
 		if (!this.fingerBtn) return
-		const scrolls = !this.tools.fingerDraws()
-		this.fingerBtn.classList.toggle('zb-active', scrolls)
-		const title = scrolls ? t('Finger scrolls, only the pen draws (tap to let the finger draw)') : t('Finger draws (tap so that only the pen draws)')
+		const penMode = !this.tools.fingerDraws()
+		this.fingerBtn.classList.toggle('zb-active', penMode)
+		this.fingerLabel.textContent = penMode ? t('Pen mode: on') : t('Pen mode: off')
+		const title = penMode
+			? t('Pen mode is on: only the pen draws, your finger scrolls and zooms. Tap to turn it off.')
+			: t('Pen mode is off: your finger draws. Tap so that only the pen draws.')
 		this.fingerBtn.title = title
 		this.fingerBtn.setAttribute('aria-label', title)
-		this.fingerBtn.setAttribute('aria-pressed', String(scrolls))
+		this.fingerBtn.setAttribute('aria-pressed', String(penMode))
 	}
 
 	updatePageLabel() {
@@ -459,8 +466,8 @@ class Editor {
 			await this.put(url, bytes, mime, null)
 			this.notifyFiles(url, 'files:node:created')
 			// from now on Ctrl+S saves into the copy, the original stays untouched
-			const res = await axios.request({ method: 'HEAD', url, validateStatus: () => true })
-			this.target = { url, name, mime, etag: res.headers?.etag || null, canWrite: true }
+			const res = await davHead(url)
+			this.target = { url, name, mime, etag: res.headers.get('etag'), canWrite: true }
 			this.nameEl.textContent = name
 			this.model.dirty = false
 			this.updateState()

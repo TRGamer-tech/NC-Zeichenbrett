@@ -68,6 +68,8 @@
 	"Your finger draws.": "Der Finger zeichnet.",
 	"Your finger scrolls and zooms, only the pen draws.": "Der Finger scrollt und zoomt, nur der Stift zeichnet.",
 	"Pen detected: your finger now scrolls and zooms, only the pen draws.": "Stift erkannt: Der Finger scrollt und zoomt jetzt, nur der Stift zeichnet.",
-	"Finger scrolls, only the pen draws (tap to let the finger draw)": "Finger scrollt, nur der Stift zeichnet (antippen, damit der Finger zeichnet)",
-	"Finger draws (tap so that only the pen draws)": "Finger zeichnet (antippen, damit nur der Stift zeichnet)"
+	"Pen mode: on": "Stiftmodus: An",
+	"Pen mode: off": "Stiftmodus: Aus",
+	"Pen mode is on: only the pen draws, your finger scrolls and zooms. Tap to turn it off.": "Stiftmodus ist an: Nur der Stift zeichnet, der Finger scrollt und zoomt. Zum Ausschalten antippen.",
+	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "Stiftmodus ist aus: Der Finger zeichnet. Antippen, damit nur der Stift zeichnet."
 }

@@ -176,7 +176,7 @@ body.zb-open { overflow: hidden; }
 
 /* ---------- small screens */
 @media (max-width: 900px) {
-	.zb-btn > span:not(.zb-dot) { display: none; }
+	.zb-btn > span:not(.zb-dot):not(.zb-keep) { display: none; }
 	.zb-side { position: absolute; right: 0; top: 0; bottom: 0; z-index: 10; box-shadow: -4px 0 16px rgba(0,0,0,.25); }
 	.zb-range { width: 90px; }
 	.zb-title { max-width: 30vw; }
@@ -189,3 +189,7 @@ body.zb-open { overflow: hidden; }
 	.zb-title, .zb-zoomgroup, .zb-spacer { display: none !important; }
 	.zb-zoomlabel { min-width: 52px !important; }
 }
+
+/* pen mode switch: always labelled so it is clear what it does */
+.zb-root .zb-btn.zb-penmode { padding: 0 10px 0 6px; font-size: 13px; }
+.zb-root .zb-btn.zb-penmode .zb-keep { white-space: nowrap; }

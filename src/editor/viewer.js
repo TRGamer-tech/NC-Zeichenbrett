@@ -15,9 +15,11 @@ import { invert, apply } from './geometry.js'
 const GAP = 16
 const MAX_PIXELS = 16 * 1024 * 1024
 const MAX_SIDE = 16384
-// a page whose full render took longer than this is not fully re-rendered on zoom-in;
-// only the visible region is (see renderDetail)
-const SLOW_PAGE_MS = 250
+// Page cost classes, measured on the first (light) render of a page:
+// FAST pages may be fully re-rendered on zoom; pages up to HEAVY get one sharp re-render
+// at full pixel density; heavier pages only get the visible region sharpened (renderDetail).
+const FAST_PAGE_MS = 250
+const HEAVY_PAGE_MS = 800
 
 export class Viewer {
 	constructor(stage, source, model) {
@@ -305,11 +307,18 @@ export class Viewer {
 				if (!keep.has(i) && this.pages[i].renderedScale) {
 					const p = this.pages[i]
 					p.task?.cancel()
-					p.base.width = p.base.height = 0
+					const empty = el('canvas', 'zb-base')
+					p.base.replaceWith(empty)
+					p.base = empty
 					p.renderedScale = 0
 					this.dropDetail(p)
 				}
 			}
+			for (const i of visible) {
+				if (this._renderAgain) break
+				await this.renderBase(i)
+			}
+			// second round: sharp version of the pages that turned out to be cheap
 			for (const i of visible) {
 				if (this._renderAgain) break
 				await this.renderBase(i)
@@ -331,11 +340,19 @@ export class Viewer {
 		}
 	}
 
+	/**
+	 * Resolution for the full-page canvas. Every page is first rendered with one device
+	 * pixel per CSS pixel (a quarter of the work on high-DPI screens). Pages that render
+	 * quickly are then upgraded to full sharpness; heavy pages keep the light version and
+	 * get sharp only where the user zooms in (renderDetail).
+	 */
 	targetBaseScale(i) {
 		const { w, h } = this.source.size(i)
-		const want = this.scale * this.dpr
 		const cap = Math.min(Math.sqrt(MAX_PIXELS / (w * h)), MAX_SIDE / w, MAX_SIDE / h)
-		return Math.min(want, cap)
+		const p = this.pages[i]
+		const light = Math.min(this.scale, cap)
+		if (p.costMs === undefined || p.costMs > HEAVY_PAGE_MS) return light
+		return Math.min(this.scale * this.dpr, cap)
 	}
 
 	async renderBase(i) {
@@ -344,7 +361,8 @@ export class Viewer {
 		if (p.renderedScale) {
 			const ratio = target / p.renderedScale
 			if (ratio < 1.15 && ratio > 0.25) return // close enough (or zoomed out: a sharper canvas is fine)
-			if (ratio >= 1.15 && p.baseMs > SLOW_PAGE_MS) return // heavy page: the detail view handles zoom-in
+			const zoomedIn = this.scale / p.renderedCss >= 1.15
+			if (zoomedIn && p.costMs > FAST_PAGE_MS) return // the detail view handles zoom-in
 		}
 		p.task?.cancel()
 		const tmp = document.createElement('canvas')
@@ -353,7 +371,7 @@ export class Viewer {
 		const t0 = performance.now()
 		try {
 			await task.promise
-			p.baseMs = performance.now() - t0
+			p.costMs ??= performance.now() - t0
 			stat('base', i, t0, tmp)
 		} catch (e) {
 			if (e?.name === 'RenderingCancelledException') return
@@ -365,6 +383,7 @@ export class Viewer {
 		p.base.replaceWith(tmp)
 		p.base = tmp
 		p.renderedScale = target
+		p.renderedCss = this.scale
 	}
 
 	dropDetail(p) {
@@ -375,8 +394,13 @@ export class Viewer {
 
 	async renderDetail(i) {
 		const p = this.pages[i]
-		const want = this.scale * this.dpr
-		if (!p.renderedScale || p.renderedScale >= want * 0.95) { this.dropDetail(p); return }
+		const heavy = p.costMs > HEAVY_PAGE_MS
+		// heavy pages (soft masks, transparency): one device pixel per CSS pixel is a quarter
+		// of the work on high-DPI screens and hardly visible when zoomed in
+		const d = heavy ? 1 : this.dpr
+		const want = this.scale * d
+		const sharpEnough = heavy ? this.scale <= p.renderedCss * 1.3 : p.renderedScale >= want * 0.95
+		if (!p.renderedScale || sharpEnough) { this.dropDetail(p); return }
 		if (p.detailTask) return
 		const r = this.rects[i]
 		const sx = this.scroller.scrollLeft; const sy = this.scroller.scrollTop
@@ -389,7 +413,6 @@ export class Viewer {
 		const key = [x0, y0, x1, y1, this.scale].map(Math.round).join(',')
 		if (p.detailKey === key && p.detail) return
 		p.detailTask?.cancel()
-		const d = this.dpr
 		const region = { x: Math.floor(x0 * d), y: Math.floor(y0 * d), w: Math.ceil((x1 - x0) * d), h: Math.ceil((y1 - y0) * d) }
 		const c = el('canvas', 'zb-detail')
 		const task = this.source.render(i, c, want, region, this.gate)
@@ -404,7 +427,7 @@ export class Viewer {
 		}
 		if (p.detailTask !== task) return
 		p.detailTask = null
-		if (this.scale * this.dpr !== want) return // zoom changed meanwhile, a new pass follows
+		if (this.scale * d !== want) return // zoom changed meanwhile, a new pass follows
 		p.detailScale = this.scale
 		p.detailCss = { x: region.x / d, y: region.y / d, w: region.w / d, h: region.h / d }
 		Object.assign(c.style, { left: p.detailCss.x + 'px', top: p.detailCss.y + 'px', width: p.detailCss.w + 'px', height: p.detailCss.h + 'px' })

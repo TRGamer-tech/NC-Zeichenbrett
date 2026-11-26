@@ -13,8 +13,12 @@ export async function exportPdf(cleanBytes, model, opts) {
 }
 
 
-export function setPdfWorker(url) {
-	pdfjs.GlobalWorkerOptions.workerSrc = url
+let resourceBase = ''
+
+/** @param {string} workerUrl  @param {string} base URL of js/pdfjs/ (with trailing slash) */
+export function setPdfWorker(workerUrl, base) {
+	pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+	resourceBase = base
 }
 
 function containsAscii(bytes, str) {
@@ -27,6 +31,10 @@ function containsAscii(bytes, str) {
 		i = bytes.indexOf(pat[0], i + 1)
 	}
 	return false
+}
+
+function hwa() {
+	try { return localStorage.getItem('zeichenbrett.hwa') !== '0' } catch (e) { return true }
 }
 
 export async function openPdf(bytes, onProgress) {
@@ -48,6 +56,13 @@ export async function openPdf(bytes, onProgress) {
 		isEvalSupported: false,
 		enableXfa: false,
 		disableAutoFetch: true,
+		wasmUrl: resourceBase + 'wasm/',
+		standardFontDataUrl: resourceBase + 'standard_fonts/',
+		cMapUrl: resourceBase + 'cmaps/',
+		cMapPacked: true,
+		iccUrl: resourceBase + 'iccs/',
+		// GPU-backed scratch canvases (soft masks, transparency groups), as in Firefox's viewer
+		enableHWA: hwa(),
 	})
 	if (onProgress) task.onProgress = onProgress
 	const pdf = await task.promise

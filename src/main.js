@@ -20,6 +20,10 @@ export const SUPPORTED_MIMES = [
 ]
 
 // mime types the admin / user chose to open in Zeichenbrett on click
+const VERSION = (() => {
+	try { return loadState(APP_ID, 'version', '') } catch (e) { return '' }
+})()
+
 const DEFAULT_MIMES = (() => {
 	try { return loadState(APP_ID, 'default-mimes', []) } catch (e) { return [] }
 })()
@@ -30,7 +34,8 @@ let editorPromise = null
 function loadEditor() {
 	if (!editorPromise) {
 		const base = generateFilePath(APP_ID, '', 'js/')
-		editorPromise = import(/* @vite-ignore */ base + 'zeichenbrett-editor.js')
+		// ?v=<app version>: otherwise browsers keep running the editor of an older version
+		editorPromise = import(/* @vite-ignore */ base + 'zeichenbrett-editor.js?v=' + encodeURIComponent(VERSION))
 			.catch((e) => { editorPromise = null; throw e })
 	}
 	return editorPromise
@@ -66,7 +71,7 @@ async function exec(...args) {
 	const { nodes } = ctxOf(args)
 	try {
 		const mod = await loadEditor()
-		mod.openEditor(nodes[0])
+		mod.openEditor(nodes[0], { version: VERSION })
 	} catch (e) {
 		console.error('[zeichenbrett] Editor konnte nicht geladen werden', e)
 		window.alert(t('Zeichenbrett could not be loaded: {error}', { error: e?.message || String(e) }))
@@ -120,4 +125,4 @@ for (const action of actions) {
 }
 
 window.OCA = window.OCA || {}
-window.OCA.Zeichenbrett = { open: (node) => loadEditor().then((m) => m.openEditor(node)) }
+window.OCA.Zeichenbrett = { open: (node) => loadEditor().then((m) => m.openEditor(node, { version: VERSION })) }

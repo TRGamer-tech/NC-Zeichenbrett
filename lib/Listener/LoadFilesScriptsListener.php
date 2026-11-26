@@ -10,6 +10,7 @@ namespace OCA\Zeichenbrett\Listener;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\Zeichenbrett\AppInfo\Application;
 use OCA\Zeichenbrett\Service\DefaultsService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
@@ -27,6 +28,7 @@ class LoadFilesScriptsListener implements IEventListener {
 		private IInitialState $initialState,
 		private DefaultsService $defaults,
 		private IUserSession $userSession,
+		private IAppManager $appManager,
 	) {
 	}
 
@@ -36,6 +38,8 @@ class LoadFilesScriptsListener implements IEventListener {
 		}
 		$uid = $this->userSession->getUser()?->getUID();
 		$this->initialState->provideInitialState('default-mimes', $this->defaults->getEffectiveMimes($uid));
+		// cache buster for the lazily loaded editor files (Nextcloud lets browsers cache .js for 6 months)
+		$this->initialState->provideInitialState('version', $this->appManager->getAppVersion(Application::APP_ID));
 		Util::addTranslations(Application::APP_ID);
 		Util::addScript(Application::APP_ID, Application::APP_ID . '-main');
 	}

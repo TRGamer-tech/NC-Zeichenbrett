@@ -68,6 +68,8 @@
 	"Your finger draws.": "Le doigt dessine.",
 	"Your finger scrolls and zooms, only the pen draws.": "Le doigt fait défiler et zoome, seul le stylet dessine.",
 	"Pen detected: your finger now scrolls and zooms, only the pen draws.": "Stylet détecté : le doigt fait maintenant défiler et zoome, seul le stylet dessine.",
-	"Finger scrolls, only the pen draws (tap to let the finger draw)": "Le doigt fait défiler, seul le stylet dessine (toucher pour dessiner au doigt)",
-	"Finger draws (tap so that only the pen draws)": "Le doigt dessine (toucher pour que seul le stylet dessine)"
+	"Pen mode: on": "Mode stylet : activé",
+	"Pen mode: off": "Mode stylet : désactivé",
+	"Pen mode is on: only the pen draws, your finger scrolls and zooms. Tap to turn it off.": "Le mode stylet est activé : seul le stylet dessine, le doigt fait défiler et zoome. Touchez pour le désactiver.",
+	"Pen mode is off: your finger draws. Tap so that only the pen draws.": "Le mode stylet est désactivé : le doigt dessine. Touchez pour que seul le stylet dessine."
 }

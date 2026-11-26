@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Zeichenbrett\Settings;
 
 use OCA\Zeichenbrett\AppInfo\Application;
+use OCP\App\IAppManager;
 use OCP\IL10N;
 use OCP\IURLGenerator;
 use OCP\Settings\IIconSection;
@@ -16,6 +17,7 @@ class Section implements IIconSection {
 	public function __construct(
 		private IL10N $l,
 		private IURLGenerator $urlGenerator,
+		private IAppManager $appManager,
 	) {
 	}
 
@@ -32,6 +34,7 @@ class Section implements IIconSection {
 	}
 
 	public function getIcon(): string {
-		return $this->urlGenerator->imagePath(Application::APP_ID, 'app-dark.svg');
+		// versioned URL: static images are cached for months by browsers and proxies
+		return $this->urlGenerator->imagePath(Application::APP_ID, 'app-dark.svg') . '?v=' . $this->appManager->getAppVersion(Application::APP_ID);
 	}
 }
