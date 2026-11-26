@@ -15,6 +15,9 @@ import { invert, apply } from './geometry.js'
 const GAP = 16
 const MAX_PIXELS = 16 * 1024 * 1024
 const MAX_SIDE = 16384
+// a page whose full render took longer than this is not fully re-rendered on zoom-in;
+// only the visible region is (see renderDetail)
+const SLOW_PAGE_MS = 250
 
 export class Viewer {
 	constructor(stage, source, model) {
@@ -39,12 +42,20 @@ export class Viewer {
 		this.lctx = this.live.getContext('2d')
 
 		this.buildPages()
-		this._onScroll = () => { this.requestOverlay(); this.scheduleRender() }
+		this._onScroll = () => { this.interacting(); this.requestOverlay(); this.scheduleRender() }
 		this.scroller.addEventListener('scroll', this._onScroll, { passive: true })
 		this._ro = new ResizeObserver(() => this.onResize())
 		this._ro.observe(this.scroller)
 		this._unsub = model.onChange(() => this.requestOverlay())
 		this.layerCache = new WeakMap()
+		// Rendering runs in slices on the main thread. While the user draws, pans or
+		// zooms, the next slice waits until the interaction has paused.
+		this.interactUntil = 0
+		this.waiting = []
+		this.gate = (cont) => {
+			if (performance.now() >= this.interactUntil) cont()
+			else this.waiting.push(cont)
+		}
 		this.liveDraw = null // function(ctx) set by tools
 	}
 
@@ -110,8 +121,15 @@ export class Viewer {
 			const pw = w * s; const ph = h * s
 			const x = (sheetW - pw) / 2
 			this.rects.push({ x, y, w: pw, h: ph })
-			const d = this.pages[i].div.style
+			const page = this.pages[i]
+			const d = page.div.style
 			d.left = x + 'px'; d.top = y + 'px'; d.width = pw + 'px'; d.height = ph + 'px'
+			if (page.detail) {
+				// keep the last sharp region visible (scaled) until a new one is rendered
+				const f = s / page.detailScale
+				const c = page.detailCss
+				Object.assign(page.detail.style, { left: c.x * f + 'px', top: c.y * f + 'px', width: c.w * f + 'px', height: c.h * f + 'px' })
+			}
 			y += ph + GAP
 		}
 		this.sheet.style.width = sheetW + 'px'
@@ -156,9 +174,8 @@ export class Viewer {
 			this.scroller.scrollLeft = pr.x + anchor.fx * pr.w - ax
 			this.scroller.scrollTop = pr.y + anchor.fy * pr.h - ay
 		}
-		if (old !== ns) {
-			for (const p of this.pages) this.dropDetail(p)
-		}
+		if (old !== ns) this.cancelStaleRenders()
+		this.interacting()
 		this.onZoom?.(ns)
 		this.requestOverlay()
 		this.requestLive()
@@ -166,6 +183,33 @@ export class Viewer {
 	}
 
 	zoomBy(f, clientX, clientY) { this.setScale(this.scale * f, clientX, clientY) }
+
+	/** Call on every pointer move / zoom step; holds back rendering for `ms`. */
+	interacting(ms = 150) {
+		this.interactUntil = Math.max(this.interactUntil, performance.now() + ms)
+		clearTimeout(this._gateTimer)
+		this._gateTimer = setTimeout(() => this.releaseGate(), ms + 5)
+	}
+
+	releaseGate() {
+		if (performance.now() < this.interactUntil) {
+			this._gateTimer = setTimeout(() => this.releaseGate(), this.interactUntil - performance.now() + 5)
+			return
+		}
+		const w = this.waiting
+		this.waiting = []
+		for (const cont of w) cont()
+	}
+
+	/** After a zoom: abort renders for the old zoom level instead of waiting for them. */
+	cancelStaleRenders() {
+		for (const p of this.pages) {
+			if (p.detailTask) { p.detailTask.cancel(); p.detailTask = null }
+			// an in-flight base render is only dropped if there is already something to show
+			if (p.task && p.renderedScale) { p.task.cancel(); p.task = null }
+		}
+		if (this._rendering) this._renderAgain = true
+	}
 
 	pageIndexAtContent(cx, cy) {
 		let best = 0; let bestD = Infinity
@@ -243,12 +287,15 @@ export class Viewer {
 	// --------------------------------------------------------------- rendering
 	scheduleRender(delay = 120) {
 		clearTimeout(this._renderTimer)
-		this._renderTimer = setTimeout(() => this.renderPass(), delay)
+		this._pending = true
+		busy(this)
+		this._renderTimer = setTimeout(() => { this._pending = false; this.renderPass() }, delay)
 	}
 
 	async renderPass() {
 		if (this._rendering) { this._renderAgain = true; return }
 		this._rendering = true
+		busy(this)
 		try {
 			const visible = this.visibleRange(0)
 			const near = this.visibleRange(this.scroller.clientHeight * 1.5)
@@ -263,19 +310,24 @@ export class Viewer {
 					this.dropDetail(p)
 				}
 			}
-			const order = [...visible, ...near.filter((i) => !visible.includes(i))]
-			for (const i of order) {
+			for (const i of visible) {
 				if (this._renderAgain) break
 				await this.renderBase(i)
 			}
-			if (!this._renderAgain) {
-				for (const i of visible) await this.renderDetail(i)
+			for (const i of visible) {
+				if (this._renderAgain) break
+				await this.renderDetail(i)
+			}
+			for (const i of near) {
+				if (this._renderAgain) break
+				if (!visible.includes(i)) await this.renderBase(i)
 			}
 		} catch (e) {
 			if (e?.name !== 'RenderingCancelledException') console.warn('[zeichenbrett] render', e)
 		} finally {
 			this._rendering = false
 			if (this._renderAgain) { this._renderAgain = false; this.scheduleRender(0) }
+			busy(this)
 		}
 	}
 
@@ -289,13 +341,20 @@ export class Viewer {
 	async renderBase(i) {
 		const p = this.pages[i]
 		const target = this.targetBaseScale(i)
-		if (p.renderedScale && Math.abs(p.renderedScale - target) / target < 0.15) return
+		if (p.renderedScale) {
+			const ratio = target / p.renderedScale
+			if (ratio < 1.15 && ratio > 0.25) return // close enough (or zoomed out: a sharper canvas is fine)
+			if (ratio >= 1.15 && p.baseMs > SLOW_PAGE_MS) return // heavy page: the detail view handles zoom-in
+		}
 		p.task?.cancel()
 		const tmp = document.createElement('canvas')
-		const task = this.source.render(i, tmp, target)
+		const task = this.source.render(i, tmp, target, null, this.gate)
 		p.task = task
+		const t0 = performance.now()
 		try {
 			await task.promise
+			p.baseMs = performance.now() - t0
+			stat('base', i, t0, tmp)
 		} catch (e) {
 			if (e?.name === 'RenderingCancelledException') return
 			throw e
@@ -318,6 +377,7 @@ export class Viewer {
 		const p = this.pages[i]
 		const want = this.scale * this.dpr
 		if (!p.renderedScale || p.renderedScale >= want * 0.95) { this.dropDetail(p); return }
+		if (p.detailTask) return
 		const r = this.rects[i]
 		const sx = this.scroller.scrollLeft; const sy = this.scroller.scrollTop
 		const vw = this.scroller.clientWidth; const vh = this.scroller.clientHeight
@@ -332,20 +392,22 @@ export class Viewer {
 		const d = this.dpr
 		const region = { x: Math.floor(x0 * d), y: Math.floor(y0 * d), w: Math.ceil((x1 - x0) * d), h: Math.ceil((y1 - y0) * d) }
 		const c = el('canvas', 'zb-detail')
-		const task = this.source.render(i, c, want, region)
+		const task = this.source.render(i, c, want, region, this.gate)
 		p.detailTask = task
+		const t0 = performance.now()
 		try {
 			await task.promise
+			stat(task.filtered ? 'detail*' : 'detail', i, t0, c)
 		} catch (e) {
 			if (e?.name === 'RenderingCancelledException') return
 			throw e
 		}
 		if (p.detailTask !== task) return
 		p.detailTask = null
-		c.style.left = region.x / d + 'px'
-		c.style.top = region.y / d + 'px'
-		c.style.width = region.w / d + 'px'
-		c.style.height = region.h / d + 'px'
+		if (this.scale * this.dpr !== want) return // zoom changed meanwhile, a new pass follows
+		p.detailScale = this.scale
+		p.detailCss = { x: region.x / d, y: region.y / d, w: region.w / d, h: region.h / d }
+		Object.assign(c.style, { left: p.detailCss.x + 'px', top: p.detailCss.y + 'px', width: p.detailCss.w + 'px', height: p.detailCss.h + 'px' })
 		if (p.detail) p.detail.replaceWith(c)
 		else p.div.append(c)
 		p.detail = c
@@ -413,6 +475,17 @@ export class Viewer {
 			ctx.restore()
 		}
 	}
+}
+
+/** Render timings for performance tests: enabled by setting window.__zbStats = [] */
+function stat(kind, page, t0, canvas) {
+	if (Array.isArray(window.__zbStats)) {
+		window.__zbStats.push({ kind, page, ms: Math.round(performance.now() - t0), mpx: +(canvas.width * canvas.height / 1e6).toFixed(1), at: Math.round(performance.now()) })
+	}
+}
+
+function busy(viewer) {
+	if (Array.isArray(window.__zbStats)) window.__zbBusy = viewer._rendering || viewer._pending
 }
 
 function el(tag, cls) {

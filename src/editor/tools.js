@@ -6,6 +6,10 @@
 //   pen / marker : draw (hold Shift for a straight line)
 //   eraser       : removes only what it touches, on all drawings
 //   two fingers, middle/right mouse button, Space + drag : pan,  Ctrl + wheel / pinch : zoom
+//
+// Stylus devices (S Pen, Surface Pen, Lenovo/Wacom pens, Apple Pencil: all report
+// pointerType "pen"): once a pen has been used, one finger pans and only the pen draws
+// (remembered per device). settings.fingerMode = 'auto' | 'draw' | 'scroll'.
 
 import { uid } from './model.js'
 import { simplify, eraseStrokePartially, itemHit } from './geometry.js'
@@ -19,10 +23,11 @@ export const TOOLS = {
 }
 
 export class Tools {
-	constructor(viewer, model, settings) {
+	constructor(viewer, model, settings, hooks = {}) {
 		this.v = viewer
 		this.model = model
 		this.s = settings
+		this.hooks = hooks
 		this.pointers = new Map()
 		this.action = null
 		this.hover = null
@@ -54,6 +59,41 @@ export class Tools {
 
 	touches() { return [...this.pointers.values()].filter((p) => p.type === 'touch') }
 
+	/** Does a single finger draw (true) or pan (false)? */
+	fingerDraws() {
+		if (this.s.fingerMode === 'draw') return true
+		if (this.s.fingerMode === 'scroll') return false
+		return !this.s.penSeen
+	}
+
+	stopInertia() {
+		cancelAnimationFrame(this._inertia)
+		this._inertia = 0
+	}
+
+	/** keep scrolling with the finger's release speed, slowing down smoothly */
+	startInertia(samples) {
+		const now = performance.now()
+		const recent = samples.filter((s) => now - s.t < 100)
+		if (recent.length < 2) return
+		const a = recent[0]; const b = recent[recent.length - 1]
+		const dt = b.t - a.t
+		if (dt <= 0) return
+		let vx = (b.x - a.x) / dt; let vy = (b.y - a.y) / dt // px per ms
+		let last = now
+		const step = (t) => {
+			const ms = Math.min(32, t - last)
+			last = t
+			this.v.scroller.scrollLeft -= vx * ms
+			this.v.scroller.scrollTop -= vy * ms
+			const decay = Math.pow(0.995, ms)
+			vx *= decay; vy *= decay
+			if (Math.hypot(vx, vy) > 0.02) this._inertia = requestAnimationFrame(step)
+			else this._inertia = 0
+		}
+		this._inertia = requestAnimationFrame(step)
+	}
+
 	onWheel(e) {
 		if (e.ctrlKey || e.metaKey) {
 			e.preventDefault()
@@ -62,6 +102,14 @@ export class Tools {
 	}
 
 	onDown(e) {
+		this.v.interacting(300)
+		this.stopInertia()
+		if (e.pointerType === 'pen' && !this.s.penSeen) {
+			this.s.penSeen = true
+			this.hooks.onPenDetected?.()
+		}
+		// palm rejection: while the pen is on the screen, ignore touches completely
+		if (e.pointerType === 'touch' && this.action?.pointerType === 'pen') return
 		this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType })
 		try { this.v.scroller.setPointerCapture(e.pointerId) } catch (er) { /* ignore */ }
 		e.preventDefault()
@@ -75,26 +123,32 @@ export class Tools {
 		}
 		if (this.action?.type === 'pinch') return
 
-		if (e.button === 1 || e.button === 2 || this.spaceDown) {
-			this.action = { type: 'pan', id: e.pointerId, x: e.clientX, y: e.clientY }
+		const isPen = e.pointerType === 'pen'
+		const fingerPans = e.pointerType === 'touch' && !this.fingerDraws()
+		if (e.button === 1 || (e.button === 2 && !isPen) || this.spaceDown || fingerPans) {
+			this.action = { type: 'pan', id: e.pointerId, x: e.clientX, y: e.clientY, pointerType: e.pointerType, samples: [] }
 			this.v.scroller.style.cursor = 'grabbing'
 			return
 		}
-		if (e.button !== 0) return
+		// Pen side (barrel) button or eraser end (Surface Pen, Lenovo/Wacom pens, S Pen):
+		// browsers report them as button 2 / 5 or only in the `buttons` bitmask (2 / 32).
+		const penEraser = isPen && (e.button === 2 || e.button === 5 || (e.buttons & (2 | 32)) !== 0)
+		if (e.button !== 0 && !penEraser) return
 
 		const pt = this.v.toDoc(e.clientX, e.clientY)
-		if (this.s.tool === 'eraser') {
+		if (penEraser || this.s.tool === 'eraser') {
 			this.model.beginGesture()
-			this.action = { type: 'erase', id: e.pointerId, page: pt.page, lx: pt.x, ly: pt.y }
+			this.action = { type: 'erase', id: e.pointerId, page: pt.page, lx: pt.x, ly: pt.y, pointerType: e.pointerType }
 			this.eraseTo(pt.x, pt.y)
 			return
 		}
 		if (!pt.inside) return
-		this.action = { type: 'draw', id: e.pointerId, page: pt.page, tool: this.s.tool, pts: [pt.x, pt.y], shift: e.shiftKey }
+		this.action = { type: 'draw', id: e.pointerId, page: pt.page, tool: this.s.tool, pts: [pt.x, pt.y], shift: e.shiftKey, pointerType: e.pointerType }
 		this.v.requestLive()
 	}
 
 	onMove(e) {
+		if (this.action) this.v.interacting()
 		const p = this.pointers.get(e.pointerId)
 		if (p) { p.x = e.clientX; p.y = e.clientY }
 		if (e.pointerType !== 'touch' && this.s.tool === 'eraser') {
@@ -118,6 +172,8 @@ export class Tools {
 			this.v.scroller.scrollLeft -= e.clientX - a.x
 			this.v.scroller.scrollTop -= e.clientY - a.y
 			a.x = e.clientX; a.y = e.clientY
+			a.samples.push({ t: performance.now(), x: e.clientX, y: e.clientY })
+			if (a.samples.length > 8) a.samples.shift()
 			return
 		}
 		const evs = e.getCoalescedEvents?.() || []
@@ -145,7 +201,10 @@ export class Tools {
 		}
 		if (a.id !== e.pointerId) return
 		this.action = null
-		if (a.type === 'pan') this.updateCursor()
+		if (a.type === 'pan') {
+			this.updateCursor()
+			if (a.pointerType === 'touch' && e.type !== 'pointercancel') this.startInertia(a.samples)
+		}
 		else if (a.type === 'erase') this.model.endGesture()
 		else if (a.type === 'draw' && e.type !== 'pointercancel') {
 			const it = this.buildItem(a)

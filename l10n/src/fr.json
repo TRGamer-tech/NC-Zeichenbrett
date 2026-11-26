@@ -64,5 +64,10 @@
 	"Zeichenbrett could not be loaded: {error}": "Impossible de charger Zeichenbrett : {error}",
 	"Zoom in (+)": "Zoom avant (+)",
 	"Zoom out (-)": "Zoom arrière (-)",
-	"edited": "modifié"
+	"edited": "modifié",
+	"Your finger draws.": "Le doigt dessine.",
+	"Your finger scrolls and zooms, only the pen draws.": "Le doigt fait défiler et zoome, seul le stylet dessine.",
+	"Pen detected: your finger now scrolls and zooms, only the pen draws.": "Stylet détecté : le doigt fait maintenant défiler et zoome, seul le stylet dessine.",
+	"Finger scrolls, only the pen draws (tap to let the finger draw)": "Le doigt fait défiler, seul le stylet dessine (toucher pour dessiner au doigt)",
+	"Finger draws (tap so that only the pen draws)": "Le doigt dessine (toucher pour que seul le stylet dessine)"
 }

@@ -64,5 +64,10 @@
 	"Zeichenbrett could not be loaded: {error}": "Impossibile caricare Zeichenbrett: {error}",
 	"Zoom in (+)": "Ingrandisci (+)",
 	"Zoom out (-)": "Riduci (-)",
-	"edited": "modificato"
+	"edited": "modificato",
+	"Your finger draws.": "Il dito disegna.",
+	"Your finger scrolls and zooms, only the pen draws.": "Il dito scorre e ingrandisce, solo la penna disegna.",
+	"Pen detected: your finger now scrolls and zooms, only the pen draws.": "Penna rilevata: ora il dito scorre e ingrandisce, solo la penna disegna.",
+	"Finger scrolls, only the pen draws (tap to let the finger draw)": "Il dito scorre, solo la penna disegna (tocca per disegnare con il dito)",
+	"Finger draws (tap so that only the pen draws)": "Il dito disegna (tocca perché disegni solo la penna)"
 }

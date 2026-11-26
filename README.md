@@ -16,10 +16,10 @@ Zeichenbrett fixes exactly that and stays out of your way:
 - **Pen, highlighter, eraser.** The eraser removes exactly what it touches, even just part of a line.
 - **Colors that work**, three line widths, undo and redo.
 - **Save, or save as copy, at any time**, as often as you like, also after you have already saved.
-- **Fast.** Opens in a fraction of a second (pdf-lib is only loaded when saving). Pages render on demand and stay sharp at any zoom, even on large CAD plans.
+- **Fast.** Opens in a fraction of a second (pdf-lib is only loaded when saving). Pages render on demand and stay sharp at any zoom, even on large CAD plans: when zooming in, only the visible part is re-rendered, and only the drawing operations inside it are executed.
 - **Stays editable.** The drawing is stored inside the file, so you can reopen it and keep drawing or erasing without anything being burnt in twice. In PDFs it is also a real PDF layer (Optional Content Group) that other PDF programs can show or hide.
 - **Can be the default viewer** for PDF, PNG and JPEG. Admins set the default, every user can override it in their personal settings. This works even with `files_pdfviewer` enabled.
-- **Tablet friendly.** Pen or one finger draws, two fingers zoom and pan.
+- **Pen aware.** Once you use a pen (S Pen, Surface Pen, Lenovo/Wacom pens, Apple Pencil), one finger scrolls and only the pen draws, with palm rejection. The pen's side button or eraser end erases. A toolbar switch lets the finger draw again. On phones without a pen, one finger draws and two fingers zoom and pan.
 - **Translated** into German (informal and formal), French and Italian.
 
 Supports Nextcloud 31 to 35.
@@ -27,7 +27,7 @@ Supports Nextcloud 31 to 35.
 ## Usage
 
 - In **Files**, open the **…** menu of a PDF or image and choose **Draw & annotate**, or just click the file if Zeichenbrett is set as default.
-- **Default viewer:** *Administration settings → Zeichenbrett* sets the default for everyone. Users can change it under *Personal settings → Zeichenbrett*.
+- **Default viewer:** *Administration settings → Zeichenbrett* sets the default for everyone. Users can change it under *Personal settings → Zeichenbrett*. Changes are applied with the *Save* button.
 
 | Key | Action | Key | Action |
 |---|---|---|---|

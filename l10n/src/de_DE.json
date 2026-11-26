@@ -64,5 +64,10 @@
 	"Zeichenbrett could not be loaded: {error}": "Zeichenbrett konnte nicht geladen werden: {error}",
 	"Zoom in (+)": "Vergrössern (+)",
 	"Zoom out (-)": "Verkleinern (-)",
-	"edited": "bearbeitet"
+	"edited": "bearbeitet",
+	"Your finger draws.": "Der Finger zeichnet.",
+	"Your finger scrolls and zooms, only the pen draws.": "Der Finger scrollt und zoomt, nur der Stift zeichnet.",
+	"Pen detected: your finger now scrolls and zooms, only the pen draws.": "Stift erkannt: Der Finger scrollt und zoomt jetzt, nur der Stift zeichnet.",
+	"Finger scrolls, only the pen draws (tap to let the finger draw)": "Finger scrollt, nur der Stift zeichnet (antippen, damit der Finger zeichnet)",
+	"Finger draws (tap so that only the pen draws)": "Finger zeichnet (antippen, damit nur der Stift zeichnet)"
 }

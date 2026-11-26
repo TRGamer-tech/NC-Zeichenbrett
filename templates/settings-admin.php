@@ -21,5 +21,8 @@ $types = [
 		</p>
 	<?php endforeach; ?>
 	<p class="settings-hint"><?php p($l->t('"Draw & annotate" is always available in the "…" menu of a file.')); ?></p>
-	<span class="zeichenbrett-status msg" aria-live="polite"></span>
+	<p class="zeichenbrett-actions">
+		<button type="button" class="primary zeichenbrett-save" disabled><?php p($l->t('Save')); ?></button>
+		<span class="zeichenbrett-status msg" aria-live="polite"></span>
+	</p>
 </div>

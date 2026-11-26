@@ -32,7 +32,7 @@ let styleInjected = false
 let current = null
 
 function loadSettings() {
-	const d = { tool: 'pen', color: '#e53935', width: 4, markerWidth: 20, eraserSize: 30 }
+	const d = { tool: 'pen', color: '#e53935', width: 4, markerWidth: 20, eraserSize: 30, fingerMode: 'auto', penSeen: false }
 	try { return { ...d, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } } catch (e) { return d }
 }
 function storeSettings(s) {
@@ -112,14 +112,7 @@ class Editor {
 	}
 
 	async init() {
-		const res = await axios.get(this.target.url, {
-			responseType: 'arraybuffer',
-			onDownloadProgress: (ev) => {
-				if (ev.total) this.setLoading(t('Loading {name} … {percent} %', { name: this.target.name, percent: Math.round(ev.loaded / ev.total * 100) }))
-			},
-		})
-		this.target.etag = res.headers?.etag || null
-		const bytes = new Uint8Array(res.data)
+		const bytes = await this.download()
 
 		if (this.isPdf) {
 			this.pdf = await openPdf(bytes)
@@ -136,6 +129,34 @@ class Editor {
 		this.model.activeId = this.model.layers[this.model.layers.length - 1].id
 		this.buildUI()
 		this.loading.remove()
+	}
+
+	/**
+	 * Load the file. Nextcloud sends no Cache-Control header for WebDAV files, so the
+	 * browser could otherwise show a stale copy right after saving: always bypass the cache.
+	 */
+	async download() {
+		const res = await fetch(this.target.url, {
+			cache: 'no-store',
+			credentials: 'same-origin',
+			headers: { requesttoken: window.OC?.requestToken || document.head.dataset.requesttoken || '' },
+		})
+		if (!res.ok) throw new Error('HTTP ' + res.status)
+		this.target.etag = res.headers.get('etag')
+		const total = Number(res.headers.get('content-length')) || 0
+		if (!res.body || !total) return new Uint8Array(await res.arrayBuffer())
+		const out = new Uint8Array(total)
+		const reader = res.body.getReader()
+		let got = 0
+		for (;;) {
+			const { done, value } = await reader.read()
+			if (done) break
+			if (got + value.length > out.length) return new Uint8Array(await new Blob([out.subarray(0, got), value, ...await drain(reader)]).arrayBuffer())
+			out.set(value, got)
+			got += value.length
+			this.setLoading(t('Loading {name} … {percent} %', { name: this.target.name, percent: Math.round(got / total * 100) }))
+		}
+		return got === total ? out : out.subarray(0, got)
 	}
 
 	fail(e) {
@@ -168,6 +189,17 @@ class Editor {
 		}, h('span', { class: 'zb-dot', style: { width: 4 + i * 5 + 'px', height: 4 + i * 5 + 'px' } })))
 		const sizes = h('div', { class: 'zb-group' }, this.sizeButtons)
 
+		// touch devices: switch between "finger draws" and "finger scrolls (only the pen draws)"
+		this.fingerBtn = null
+		if (navigator.maxTouchPoints > 0) {
+			this.fingerBtn = iconBtn('pan', '', () => {
+				this.settings.fingerMode = this.tools.fingerDraws() ? 'scroll' : 'draw'
+				storeSettings(this.settings)
+				this.updateFingerUI()
+				this.toast(this.tools.fingerDraws() ? t('Your finger draws.') : t('Your finger scrolls and zooms, only the pen draws.'))
+			})
+		}
+
 		this.undoBtn = iconBtn('undo', t('Undo (Ctrl+Z)'), () => this.model.undo())
 		this.redoBtn = iconBtn('redo', t('Redo (Ctrl+Y)'), () => this.model.redo())
 		this.zoomLabel = h('button', { type: 'button', class: 'zb-btn zb-zoomlabel', title: t('Fit to width (0)'), onclick: () => this.viewer.fit('width') }, '100 %')
@@ -179,6 +211,7 @@ class Editor {
 		const bar = h('header', { class: 'zb-top' },
 			h('div', { class: 'zb-title' }, this.dirtyDot, this.nameEl, this.pageLabel),
 			tools, colors, sizes,
+			this.fingerBtn && h('div', { class: 'zb-group' }, this.fingerBtn),
 			h('div', { class: 'zb-group' }, this.undoBtn, this.redoBtn),
 			h('div', { class: 'zb-group zb-zoomgroup' },
 				iconBtn('zoomOut', t('Zoom out (-)'), () => this.viewer.zoomBy(1 / 1.25)),
@@ -195,14 +228,32 @@ class Editor {
 		this.root.append(bar, this.stage, this.toastEl)
 
 		this.viewer = new Viewer(this.stage, this.source, this.model)
+		if (Array.isArray(window.__zbStats)) window.__zbModel = this.model // test hook
 		this.viewer.onZoom = (sc) => { this.zoomLabel.textContent = Math.round(sc * 100) + ' %' }
-		this.tools = new Tools(this.viewer, this.model, s)
+		this.tools = new Tools(this.viewer, this.model, s, {
+			onPenDetected: () => {
+				storeSettings(this.settings)
+				this.updateFingerUI()
+				if (this.settings.fingerMode === 'auto') this.toast(t('Pen detected: your finger now scrolls and zooms, only the pen draws.'), 5000)
+			},
+		})
 		if (this.pageLabel) this.viewer.scroller.addEventListener('scroll', () => this.updatePageLabel(), { passive: true })
 		this.model.onChange(() => this.updateState())
 		this.setTool(s.tool)
 		this.setColor(s.color)
+		this.updateFingerUI()
 		this.updateState()
 		this.updatePageLabel()
+	}
+
+	updateFingerUI() {
+		if (!this.fingerBtn) return
+		const scrolls = !this.tools.fingerDraws()
+		this.fingerBtn.classList.toggle('zb-active', scrolls)
+		const title = scrolls ? t('Finger scrolls, only the pen draws (tap to let the finger draw)') : t('Finger draws (tap so that only the pen draws)')
+		this.fingerBtn.title = title
+		this.fingerBtn.setAttribute('aria-label', title)
+		this.fingerBtn.setAttribute('aria-pressed', String(scrolls))
 	}
 
 	updatePageLabel() {
@@ -441,6 +492,15 @@ class Editor {
 		this.root.remove()
 		document.body.classList.remove('zb-open')
 		current = null
+	}
+}
+
+async function drain(reader) {
+	const parts = []
+	for (;;) {
+		const { done, value } = await reader.read()
+		if (done) return parts
+		parts.push(value)
 	}
 }
 

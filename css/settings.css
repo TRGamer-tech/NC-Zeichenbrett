@@ -4,3 +4,5 @@
 .zeichenbrett-table select { min-width: 280px; }
 .zeichenbrett-settings .zeichenbrett-status { display: inline-block; margin-top: 8px; }
 .zeichenbrett-settings .zeichenbrett-status:empty { display: none; }
+.zeichenbrett-settings .zeichenbrett-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.zeichenbrett-settings .zeichenbrett-actions .zeichenbrett-status { margin-top: 0; }

@@ -82,23 +82,37 @@ export function pdfSource({ pages, ocConfig }) {
 			}
 			return vp.transform
 		},
-		/** render page i (or a region of it) at `scale` device px per CSS px at zoom 1 */
-		render(i, canvas, scale, region) {
-			const vp = region
-				? pages[i].getViewport({ scale, offsetX: -region.x, offsetY: -region.y })
-				: pages[i].getViewport({ scale })
-			canvas.width = region ? region.w : Math.max(1, Math.floor(vp.width))
-			canvas.height = region ? region.h : Math.max(1, Math.floor(vp.height))
+		/**
+		 * Render page i (or a region of it, in device pixels) at `scale`.
+		 * The first full render records the bounding box of every drawing operation;
+		 * region renders then skip all operations outside the region. On heavy plans this
+		 * makes zoomed-in rendering several times faster (same technique as Firefox's viewer).
+		 */
+		render(i, canvas, scale, region, gate) {
+			const page = pages[i]
+			const full = page.getViewport({ scale })
+			const vp = region ? page.getViewport({ scale, offsetX: -region.x, offsetY: -region.y }) : full
+			canvas.width = region ? region.w : Math.max(1, Math.floor(full.width))
+			canvas.height = region ? region.h : Math.max(1, Math.floor(full.height))
 			const ctx2 = canvas.getContext('2d', { alpha: false })
 			ctx2.fillStyle = '#fff'
 			ctx2.fillRect(0, 0, canvas.width, canvas.height)
-			const task = pages[i].render({
-				canvas,
-				canvasContext: ctx2,
-				viewport: vp,
-				optionalContentConfigPromise: ocPromise,
-			})
-			return { promise: task.promise, cancel: () => task.cancel() }
+			const params = { canvas, canvasContext: ctx2, viewport: vp, optionalContentConfigPromise: ocPromise }
+			const boxes = page.recordedBBoxes
+			if (!region && !boxes) {
+				params.recordOperations = true
+			} else if (region && boxes) {
+				const minX = region.x / full.width
+				const minY = region.y / full.height
+				const maxX = (region.x + region.w) / full.width
+				const maxY = (region.y + region.h) / full.height
+				params.operationsFilter = (idx) => !boxes.isEmpty(idx) &&
+					boxes.minX(idx) <= maxX && boxes.maxX(idx) >= minX && boxes.minY(idx) <= maxY && boxes.maxY(idx) >= minY
+			}
+			const task = page.render(params)
+			// lets the viewer pause rendering between slices while the user interacts
+			if (gate) task.onContinue = gate
+			return { promise: task.promise, cancel: () => task.cancel(), filtered: !!params.operationsFilter }
 		},
 		ocGroups() {
 			if (!ocConfig) return []
