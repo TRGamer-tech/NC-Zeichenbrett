@@ -4,6 +4,9 @@
 -->
 # Changelog
 
+## 1.5.1
+- App Store listing: new screenshots (editor with markup, text fields, tablet with pen mode, settings). No code changes
+
 ## 1.5.0
 - Text fields: new text tool (T). Tap to add a text field, tap a text field to edit its text, colour or size, drag it to move it, "Delete" or the eraser removes it. Only the text tool can grab text fields, drawing never moves them
 - Text fields are stored like drawings: editable again in Zeichenbrett, and real, searchable text in the PDF for other programs
